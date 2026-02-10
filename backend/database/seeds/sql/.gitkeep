@@ -1,0 +1,4 @@
+# This directory contains SQL seed files for Supabase
+# Files should be named: 001_description.sql, 002_description.sql, etc.
+# See docs/SUPABASE_SEEDING.md for usage instructions
+

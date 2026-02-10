@@ -9,7 +9,7 @@
 ### Request Flow
 
 ```
-1. User authenticates → Supabase JWT issued
+1. User authenticates via Lark → Laravel validates → Laravel generates Supabase JWT
 2. Next.js BFF validates Supabase JWT
 3. Next.js extracts user ID from JWT
 4. Next.js calls Laravel with:

@@ -23,7 +23,7 @@ app/Modules/
 ├── Attendance/               # Attendance module
 │   ├── Domain/
 │   │   ├── Models/
-│   │   ├── Policies/
+│   │   ├── Rules/          # Business rule validators (renamed from Policies/)
 │   │   ├── Services/
 │   │   │   └── AttendanceService.php
 │   │   └── Events/
@@ -40,7 +40,7 @@ app/Modules/
 ├── Leave/                    # Leave module
 │   ├── Domain/
 │   │   ├── Models/
-│   │   ├── Policies/
+│   │   ├── Rules/          # Business rule validators (renamed from Policies/)
 │   │   ├── Services/
 │   │   │   └── LeaveService.php
 │   │   └── Events/
@@ -92,8 +92,7 @@ return [
 
 - **Supabase**: `config/supabase.php`
 - **Modules**: `config/modules.php`
-- **Sanctum**: `config/sanctum.php`
-- **Permission**: `config/permission.php`
+- **BFF**: `config/services.php` (bff.secret)
 
 ## Environment Variables
 

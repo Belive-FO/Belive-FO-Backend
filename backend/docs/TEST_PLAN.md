@@ -268,14 +268,38 @@ public function test_clock_in_endpoint()
 
 ---
 
-### ✅ Sanctum + Supabase JWT alignment
+### ✅ BFF Middleware + JWT Validation
 
-Test:
+Test that Laravel correctly validates requests from Next.js BFF:
 
-* Token validation
-* Claims mapping (`sub`, `role`, `permissions`)
+- `X-Internal-Key` validation (shared secret)
+- `X-User-ID` extraction and trust
+- Rejection of direct external requests
 
-This prevents **split-brain auth** later.
+```php
+public function test_bff_middleware_validates_internal_key()
+{
+    $this->postJson('/internal/attendance/clock-in')
+         ->assertStatus(403); // Missing internal key
+
+    $this->postJson('/internal/attendance/clock-in', [], [
+        'X-Internal-Key' => 'wrong-key',
+        'X-User-ID' => '123'
+    ])->assertStatus(403); // Invalid key
+}
+
+public function test_bff_middleware_extracts_user_id()
+{
+    $response = $this->postJson('/internal/attendance/clock-in', [], [
+        'X-Internal-Key' => config('services.bff.secret'),
+        'X-User-ID' => '123'
+    ]);
+
+    $this->assertEquals(123, request()->input('user_id'));
+}
+```
+
+**Note:** JWT validation happens in Next.js BFF, not Laravel. Laravel trusts the identity forwarded by the BFF.
 
 ---
 

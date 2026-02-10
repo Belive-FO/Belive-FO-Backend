@@ -8,7 +8,10 @@
 
 ### Core Principle: Single Source of Truth
 
-This system follows a **Supabase-first architecture** where authentication and authorization are handled by Supabase, while Laravel focuses exclusively on domain logic and business rules.
+This system follows a **Supabase-first architecture** where:
+- **Laravel** handles initial authentication (Lark OAuth validation) and JWT generation
+- **Supabase** handles authorization (RLS policies) and JWT validation (via Next.js BFF)
+- **Laravel** focuses on domain logic and business rules
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -51,7 +54,9 @@ The following components **ARE used** for business logic:
 
 | Responsibility | System | Implementation |
 |----------------|--------|----------------|
-| **User Identity** | Supabase | JWT token issued after Lark OAuth |
+| **Initial Authentication** | Laravel | Validates Lark OAuth, generates JWT |
+| **JWT Validation** | Next.js BFF | Validates JWT on each request |
+| **Authorization (RLS)** | Supabase | Uses JWT to filter data |
 | **Row-Level Access Control** | Supabase | RLS policies in PostgreSQL |
 | **Data Visibility** | Supabase | RLS filters queries automatically |
 | **Business Rules** | Laravel | Domain services (e.g., geofence validation) |
@@ -66,20 +71,24 @@ The following components **ARE used** for business logic:
 ```
 Request Flow (Clock-In Example):
 ─────────────────────────────────────────────────────────────────
-1. Next.js receives clock-in request
-2. Next.js validates Supabase JWT (user identity confirmed)
-3. Next.js calls Laravel: POST /internal/attendance/clock-in
+[Initial Login Only]
+1. User authenticates → Laravel validates Lark OAuth → Laravel generates Supabase JWT
+
+[Subsequent Requests]
+2. Next.js receives clock-in request
+3. Next.js receives and validates Supabase JWT (user identity confirmed)
+4. Next.js calls Laravel: POST /internal/attendance/clock-in
    - Header: X-User-ID: 123 (extracted from Supabase JWT)
    - Header: X-Internal-Key: [shared secret]
-4. Laravel trusts the identity (no re-auth needed)
-5. Laravel executes business logic (geofence, duplicate check)
-6. Laravel writes to Supabase DB (service role)
-7. Supabase Realtime broadcasts to user (filtered by RLS)
+5. Laravel trusts the identity (no re-auth needed)
+6. Laravel executes business logic (geofence, duplicate check)
+7. Laravel writes to Supabase DB (service role)
+8. Supabase Realtime broadcasts to user (filtered by RLS)
 ```
 
 ### Domain Rules vs Authorization Policies
 
-**Important:** The `Domain/Policies/` folders in modules contain **business rule validators**, NOT Laravel authorization policies. These should be renamed to `Domain/Rules/` or `Domain/Validators/` to avoid confusion.
+**Important:** The `Domain/Policies/` folders have been renamed to `Domain/Rules/` to avoid confusion with Laravel authorization policies. These contain **business rule validators** for domain logic validation.
 
 **Before (Laravel Policy - REMOVED):**
 ```php

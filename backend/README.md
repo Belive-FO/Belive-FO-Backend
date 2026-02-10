@@ -76,12 +76,54 @@ vendor/bin/pint --dirty       # Format code
 
 # Supabase
 php artisan supabase:test      # Test Supabase connection
+php artisan supabase:seed      # Seed database using SQL files
 
 # Laravel Boost (AI Development)
 php artisan boost:install      # Install/update Boost
 php artisan boost:update       # Update Boost resources
 php artisan boost:mcp          # Start MCP server
 ```
+
+## Database Seeding
+
+### Supabase SQL Seeding
+
+The project uses SQL files for seeding Supabase database. This approach is recommended for infrastructure setup and initial data.
+
+**Location:** SQL seed files are stored in `database/seeds/sql/`
+
+**Usage:**
+```bash
+# Seed all SQL files (executed in alphabetical order)
+php artisan supabase:seed
+
+# Seed a specific file
+php artisan supabase:seed 001_initial_setup.sql
+```
+
+**Safety Features:**
+- Automatically blocks DELETE, TRUNCATE, and DROP operations
+- Uses transactions for rollback on errors
+- Requires `--force` flag for dangerous operations
+- Warns in production environment
+
+**File Naming Convention:**
+- Use numbered prefixes: `001_description.sql`, `002_description.sql`
+- Files are executed in alphabetical order
+
+**Example:**
+```bash
+# Create your seed file
+# database/seeds/sql/001_initial_setup.sql
+
+# Run the seeder
+php artisan supabase:seed
+
+# Or seed specific file
+php artisan supabase:seed 001_initial_setup.sql
+```
+
+> See [docs/SUPABASE_SEEDING.md](docs/SUPABASE_SEEDING.md) for detailed guide and best practices.
 
 ## Project Structure
 
@@ -164,10 +206,15 @@ vendor/bin/pint --dirty
 ### Production
 
 - `laravel/framework` ^12.0
-- `laravel/sanctum` ^4.3 - API authentication
-- `saeedvir/supabase` ^1.0 - Supabase integration
-- `spatie/laravel-permission` ^6.24 - Role-based permissions
-- `spatie/laravel-activitylog` ^4.11 - Activity logging
+- `saeedvir/supabase` ^1.0 - Supabase integration & JWT generation
+- `spatie/laravel-activitylog` ^4.11 - Audit trail logging
+
+#### Not Used (Replaced by Supabase-First Architecture)
+
+- ~~`laravel/sanctum`~~ - Replaced by Supabase JWT (validated by Next.js BFF)
+- ~~`spatie/laravel-permission`~~ - Replaced by Supabase RLS policies
+
+> See [Architecture Decisions](docs/ARCHITECTURE-DECISIONS.md) for details on the Supabase-first approach.
 
 ### Development
 

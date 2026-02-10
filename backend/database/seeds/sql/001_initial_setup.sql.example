@@ -1,0 +1,73 @@
+-- ============================================
+-- Initial Setup Seed File (Example Template)
+-- ============================================
+-- 
+-- This is an example template for creating initial setup data.
+-- Copy this file and rename it to 001_initial_setup.sql (remove .example)
+-- 
+-- IMPORTANT SAFETY NOTES:
+-- - This seeder ONLY uses INSERT statements (safe operations)
+-- - NEVER use DELETE, TRUNCATE, or DROP in seed files
+-- - Always use transactions (handled automatically by the command)
+-- - Test in development before running in production
+--
+-- ============================================
+
+-- Example: Create initial super admin user in auth.users
+-- Note: This requires proper password hashing using crypt() function
+-- 
+-- INSERT INTO auth.users (
+--     instance_id,
+--     id,
+--     aud,
+--     role,
+--     email,
+--     encrypted_password,
+--     email_confirmed_at,
+--     created_at,
+--     updated_at,
+--     raw_app_meta_data,
+--     raw_user_meta_data,
+--     is_super_admin
+-- )
+-- VALUES (
+--     '00000000-0000-0000-0000-000000000000',
+--     gen_random_uuid(),
+--     'authenticated',
+--     'authenticated',
+--     'admin@belive.com',
+--     crypt('YourSecurePassword123!', gen_salt('bf')),
+--     NOW(),
+--     NOW(),
+--     NOW(),
+--     '{"provider":"email","providers":["email"]}',
+--     '{}',
+--     true
+-- );
+
+-- Example: Create corresponding profile in public.users
+-- (Assuming you have a users table in public schema)
+--
+-- INSERT INTO public.users (id, email, name, role, created_at, updated_at)
+-- SELECT 
+--     id,
+--     email,
+--     'Super Admin',
+--     'super_admin',
+--     NOW(),
+--     NOW()
+-- FROM auth.users
+-- WHERE email = 'admin@belive.com'
+-- ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- Best Practices:
+-- ============================================
+-- 1. Use ON CONFLICT DO NOTHING for idempotent inserts
+-- 2. Always include created_at and updated_at timestamps
+-- 3. Use gen_random_uuid() for UUID generation
+-- 4. Use crypt() with gen_salt('bf') for password hashing
+-- 5. Add comments explaining what each section does
+-- 6. Test your SQL in Supabase SQL Editor before adding to seed file
+-- ============================================
+

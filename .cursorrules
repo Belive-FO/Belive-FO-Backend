@@ -1,0 +1,167 @@
+# BeLive FlowOffice - AI Development Rules
+
+## Mandatory Documentation Reading Order
+
+When starting work on this project, ALWAYS read documentation in this sequence:
+
+1. **@docs/ARCHITECTURE-DECISIONS.md** - Source of truth for architectural choices
+2. **@docs/Backend-System-Architecture.md** - System design and responsibility boundaries
+3. **@docs/TRUSTED_BFF_MIDDLEWARE.md** - Security model and request flow
+4. **@docs/MODULE_STRUCTURE.md** - Code organization and navigation
+5. **@docs/Belive-FO-Implementation-Plan.md** - Roadmap and implementation examples
+6. **@docs/TEST_PLAN.md** - Testing strategy and quality gates
+7. **@backend/README.md** - Setup and development commands
+
+## Architecture Principles (Non-Negotiable)
+
+### Supabase-First Authentication & Authorization
+
+- ✅ **Laravel** generates Supabase JWT after Lark OAuth validation
+- ✅ **Next.js BFF** validates JWT on every request
+- ✅ **Supabase RLS** handles row-level authorization
+- ❌ **DO NOT** use Laravel Sanctum, Spatie Permission, or Laravel Policies for auth
+- ❌ **DO NOT** implement auth guards or token validation in Laravel
+
+### Request Flow Pattern
+
+```
+User → Lark OAuth → Laravel (validates, generates JWT) → User receives JWT
+User → Next.js BFF (validates JWT) → Laravel (trusted internal call with X-User-ID)
+```
+
+### Modular Monolith Rules
+
+- ✅ Modules communicate via `Shared/Contracts` interfaces
+- ✅ Use Domain Events for cross-module coordination
+- ❌ NEVER import models from other modules directly
+- ❌ NEVER access another module's database tables directly
+
+### Directory Structure
+
+- Business rules live in `Domain/Rules/` (NOT `Domain/Policies/`)
+- Business logic in `Domain/Services/`
+- External APIs in `Infrastructure/Adapters/`
+- Use cases in `Application/UseCases/`
+
+## Documentation Maintenance
+
+### Before Making Changes
+
+1. Search `@docs` for related architectural decisions
+2. Check if your change affects auth flow, module boundaries, or external integrations
+3. Review relevant ADRs in `ARCHITECTURE-DECISIONS.md`
+
+### After Making Changes
+
+1. Update affected documentation immediately
+2. If you modify auth flow → update `TRUSTED_BFF_MIDDLEWARE.md` and `Backend-System-Architecture.md`
+3. If you add/remove packages → update `backend/README.md` and `Belive-FO-Implementation-Plan.md`
+4. If you change module structure → update `MODULE_STRUCTURE.md`
+5. If you make architectural decisions → add ADR to `ARCHITECTURE-DECISIONS.md`
+
+### Creating New ADRs
+
+When making significant architectural choices, add a new ADR following this template:
+
+```markdown
+## ADR-XXX: [Decision Title]
+
+**Status:** Accepted  
+**Date:** YYYY-MM-DD  
+**Context:** What problem are we solving?  
+**Decision:** What did we decide?  
+**Consequences:** What are the trade-offs?
+```
+
+## Package Usage Guidelines
+
+### ✅ Packages We Use
+
+- `laravel/framework` - Web framework
+- `saeedvir/supabase` - Supabase client & JWT generation
+- `spatie/laravel-activitylog` - Audit trails (NOT for auth)
+- `laravel/boost` - AI development tooling
+
+### ❌ Packages We DO NOT Use
+
+- `laravel/sanctum` - Replaced by Supabase JWT
+- `spatie/laravel-permission` - Replaced by Supabase RLS
+- Any Laravel auth guards or policies for authorization
+
+## Code Patterns to Follow
+
+### Business Rule Validation
+
+```php
+// ✅ Correct: Domain Rules
+$validation = $this->attendanceRules->canClockIn($userId, $location);
+if ($validation->failed()) {
+    throw new BusinessRuleViolationException($validation->errors());
+}
+
+// ❌ Wrong: Laravel Policies
+$this->authorize('clockIn', Attendance::class);
+```
+
+### Controller Pattern
+
+```php
+// ✅ Correct: Trust BFF-forwarded identity
+public function clockIn(Request $request): JsonResponse
+{
+    $userId = $request->input('user_id'); // From TrustedBffMiddleware
+    $result = $this->clockInUseCase->execute($userId, $request->all());
+    return response()->json($result);
+}
+
+// ❌ Wrong: JWT validation in Laravel
+Auth::guard('sanctum')->user();
+```
+
+## Testing Requirements
+
+- Always test module independence (can module boot alone?)
+- Test business rules without framework dependencies
+- Test BFF middleware security (X-Internal-Key validation)
+- Do NOT test JWT validation in Laravel (that's Next.js BFF's job)
+
+## When in Doubt
+
+1. Check `@docs/ARCHITECTURE-DECISIONS.md` first
+2. Search the docs folder for similar patterns
+3. Ask the user before introducing new patterns
+4. Never assume—verify against documentation
+
+## Supabase Data Protection Rules (MANDATORY)
+
+### ❌ NEVER Execute These Operations on Supabase
+
+- **DELETE** statements (especially without WHERE clauses)
+- **TRUNCATE** statements
+- **DROP** statements (DROP TABLE, DROP SCHEMA, DROP DATABASE)
+- **ALTER TABLE ... DROP** operations
+- Modifications to `auth.users` table (except INSERT for new users)
+- Removal of RLS policies without explicit user approval
+
+### ✅ Safe Operations for Seeders
+
+- **INSERT** statements (adding new data)
+- **UPDATE** statements (with explicit WHERE clauses)
+- **CREATE** statements (tables, functions, triggers)
+- **ALTER TABLE ... ADD** (adding columns, constraints)
+
+### Data Protection Workflow
+
+1. **Before writing SQL:** Verify it only contains safe operations
+2. **Before executing:** Review SQL file content
+3. **If dangerous operations needed:** Ask user for explicit approval
+4. **Always use transactions:** Ensure rollback capability
+5. **Never auto-delete:** Always require explicit user confirmation
+
+### Seeding Command Usage
+
+- Use `php artisan supabase:seed` for safe seeding
+- SQL files must be in `database/seeds/sql/`
+- Command automatically blocks dangerous operations
+- See `docs/SUPABASE_SEEDING.md` for detailed guide
+

@@ -32,10 +32,10 @@ composer require saeedvir/supabase
 ```
 
 **What it does:**
+- Enables Laravel to generate Supabase-compatible JWT tokens
 - Connects Laravel to Supabase Postgres database
 - Enables Realtime subscriptions from Laravel
 - Manages Supabase Storage (file uploads/downloads)
-- Generates Supabase JWTs for Next.js clients
 
 **Configuration:**
 ```php
@@ -124,7 +124,11 @@ Prompt: "Using Laravel Boost context, create a Leave model with:
 composer require spatie/laravel-activitylog
 ```
 
-> **Note:** Laravel Sanctum and Spatie Permissions are **NOT used** in this architecture. Authentication and authorization are handled by Supabase (JWT tokens and RLS policies). See `Backend-System-Architecture.md` for details on the Supabase-first architecture.
+> **Note:** Laravel Sanctum and Spatie Permissions are **NOT used** in this architecture.
+- **Authentication**: Laravel validates Lark OAuth and generates JWT tokens
+- **Authorization**: Supabase RLS policies use JWT tokens to filter data
+- **JWT Validation**: Next.js BFF validates JWT on subsequent requests
+See `Backend-System-Architecture.md` for details on the Supabase-first architecture.
 
 ### Frontend Dependencies
 
@@ -1170,6 +1174,8 @@ public function larkCallback(Request $request)
     );
     
     // 4. Generate Supabase JWT token
+    // Laravel is responsible for JWT generation after successful authentication
+    // This JWT will be validated by Next.js BFF and used by Supabase RLS
     $supabaseToken = app(SupabaseJwtService::class)->generateToken($user);
     
     // Note: No Sanctum token needed. Next.js BFF will use Supabase JWT
