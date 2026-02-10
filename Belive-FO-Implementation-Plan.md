@@ -119,16 +119,12 @@ Prompt: "Using Laravel Boost context, create a Leave model with:
 - Activity logging enabled"
 ```
 
-**Authentication & Authorization**
-```bash
-composer require laravel/sanctum
-composer require spatie/laravel-permission
-```
-
 **Audit Trail**
 ```bash
 composer require spatie/laravel-activitylog
 ```
+
+> **Note:** Laravel Sanctum and Spatie Permissions are **NOT used** in this architecture. Authentication and authorization are handled by Supabase (JWT tokens and RLS policies). See `Backend-System-Architecture.md` for details on the Supabase-first architecture.
 
 ### Frontend Dependencies
 
@@ -334,7 +330,7 @@ Scenario: You built everything using Lark's proprietary features
 Your codebase:
 ├─ LeaveController.php (calls Lark API directly)
 ├─ AttendanceService.php (uses Lark GPS format)
-├─ ClaimPolicy.php (validates using Lark approval response format)
+├─ ClaimRules.php (validates using Lark approval response format)
 └─ UserModel.php (stores data in Lark's structure)
 
 CFO: "We're switching to Microsoft Teams next month"
@@ -350,7 +346,7 @@ This is vendor lock-in.
 Our architecture:
 
 ├─ Domain/
-│  ├─ LeavePolicy.php         ← Pure business logic (vendor-agnostic)
+│  ├─ LeaveRules.php          ← Pure business logic (vendor-agnostic)
 │  └─ AttendanceService.php   ← Pure business logic (vendor-agnostic)
 │
 ├─ Adapters/
@@ -450,19 +446,21 @@ Domain layer never changes.
 └─────┬──────────────────────────────────────────────────┬─────────────┘
       │                                                  │
       │ HTTPS REST                                       │ WebSocket
-      │ Authorization: Bearer {sanctum_token}            │ (Realtime)
+      │ X-User-ID: 123 (from Supabase JWT)               │ (Realtime)
+      │ X-Internal-Key: [shared secret]                  │
       │                                                  │
       ▼                                                  ▼
 ┌───────────────────────────────────────────────────────────────────────┐
-│              LARAVEL API (AUTHORITATIVE LAYER)                         │
+│              LARAVEL API (DOMAIN LOGIC ENGINE)                        │
 │                  https://api.belive.com                                │
 │                                                                        │
 │  Dependencies:                                                         │
 │  ├─ saeedvir/supabase (Realtime + Storage bridge)                    │
-│  ├─ laravel/sanctum (API auth)                                        │
-│  ├─ spatie/laravel-permission (RBAC)                                  │
 │  ├─ spatie/laravel-activitylog (Audit)                                │
 │  └─ laravel/boost --dev (AI context - dev only)               │
+│                                                                        │
+│  Note: Laravel Sanctum and Spatie Permissions are NOT used.           │
+│  Authentication/authorization handled by Supabase (JWT + RLS).       │
 │                                                                        │
 │  ┌──────────────────────────────────────────────────────────────────┐ │
 │  │                     ADAPTER LAYER                                 │ │
@@ -504,7 +502,7 @@ Domain layer never changes.
 │  │                                                                   │ │
 │  │  Attendance/                Leave/                 Claims/        │ │
 │  │  ├─ Domain/                 ├─ Domain/             ├─ Domain/    │ │
-│  │  │  ├─ Policy.php           │  ├─ Policy.php       │  ├─ Policy  │ │
+│  │  │  ├─ Rules.php            │  ├─ Rules.php        │  ├─ Rules   │ │
 │  │  │  ├─ Service.php          │  ├─ Service.php      │  └─ Service │ │
 │  │  │  └─ Events/              │  └─ Events/          │             │ │
 │  │  ├─ Application/            ├─ Application/        ├─ App/       │ │
@@ -516,8 +514,8 @@ Domain layer never changes.
 │  ┌──────────────────────────────────────────────────────────────────┐ │
 │  │                 CROSS-CUTTING CONCERNS                            │ │
 │  │                                                                   │ │
-│  │  • Laravel Sanctum → API token authentication                    │ │
-│  │  • Spatie Permission → Role-based access control                 │ │
+│  │  • Supabase JWT → User identity (validated by Next.js BFF)      │ │
+│  │  • Supabase RLS → Row-level access control                       │ │
 │  │  • Spatie Activity Log → Audit trail (automatic)                 │ │
 │  │  • Laravel Events → Domain event system                          │ │
 │  │  • saeedvir/supabase → DB + Realtime + Storage access            │ │
@@ -638,14 +636,11 @@ STEP 3: Laravel Validates (AUTHORITATIVE)
    ┌───────────────────────────────────────────────────────┐
    │  AttendanceController                                 │
    │                                                       │
-   │  1. Sanctum validates token                           │
-   │     ✅ User authenticated                              │
+   │  1. TrustedBffMiddleware validates                    │
+   │     ✅ X-Internal-Key matches shared secret           │
+   │     ✅ X-User-ID extracted from Supabase JWT         │
    │                                                       │
-   │  2. Authorize action                                  │
-   │     $this->authorize('clockIn', Attendance::class)    │
-   │     ✅ User has permission                             │
-   │                                                       │
-   │  3. Dispatch to Handler                               │
+   │  2. Dispatch to Handler                               │
    │     $handler->handle(new ClockInCommand(...))         │
    └───────────────────────┬───────────────────────────────┘
                            │
@@ -786,12 +781,11 @@ TOTAL TIME: ~400-600ms
 
 Security Layers Applied:
 ✅ Lark native GPS (hard to spoof)
-✅ Laravel Sanctum auth
-✅ Laravel policy authorization
-✅ Geofence validation
-✅ Duplicate prevention
-✅ Supabase RLS (defense in depth)
-✅ Audit log (automatic via Spatie)
+✅ Supabase JWT authentication (validated by Next.js BFF)
+✅ TrustedBffMiddleware (validates internal API calls)
+✅ Domain rules validation (geofence, duplicate check)
+✅ Supabase RLS (row-level access control)
+✅ Audit log (automatic via Spatie Activity Log)
 ```
 
 ### Diagram 3: Leave Approval Flow
@@ -832,7 +826,7 @@ STEP 2: Laravel Validates & Creates Approval
    ┌───────────────────────────────────────────────────────┐
    │  SubmitLeaveHandler (Application Layer)               │
    │                                                       │
-   │  1. Domain Validation (LeavePolicy)                   │
+   │  1. Domain Validation (LeaveRules)                   │
    │     ┌───────────────────────────────────────────┐     │
    │     │ Check balance:                           │     │
    │     │ User has: 12 days annual leave           │     │
@@ -1114,19 +1108,12 @@ cd belive-api
 
 # Install dependencies
 composer require saeedvir/supabase
-composer require laravel/sanctum
-composer require spatie/laravel-permission
 composer require spatie/laravel-activitylog
 composer require --dev laravel/boost
 composer require --dev barryvdh/laravel-ide-helper
 
-# Configure Sanctum
-php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
-php artisan migrate
-
-# Configure Spatie Permission
-php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
-php artisan migrate
+# Note: Laravel Sanctum and Spatie Permissions are NOT used.
+# Authentication/authorization handled by Supabase (JWT + RLS).
 
 # Generate IDE helper
 php artisan ide-helper:generate
@@ -1182,18 +1169,14 @@ public function larkCallback(Request $request)
         ]
     );
     
-    // 4. Assign default role
-    if (!$user->hasAnyRole()) {
-        $user->assignRole('employee');
-    }
-    
-    // 5. Generate tokens
-    $sanctumToken = $user->createToken('mobile-app')->plainTextToken;
+    // 4. Generate Supabase JWT token
     $supabaseToken = app(SupabaseJwtService::class)->generateToken($user);
+    
+    // Note: No Sanctum token needed. Next.js BFF will use Supabase JWT
+    // and pass user identity to Laravel via X-User-ID header.
     
     return response()->json([
         'user' => $user,
-        'api_token' => $sanctumToken,
         'supabase_token' => $supabaseToken,
     ]);
 }
@@ -1213,9 +1196,9 @@ npx shadcn-ui@latest add button form input
 
 **Success Criteria:**
 - ✅ User can log in via Lark OAuth
-- ✅ Laravel issues both Sanctum and Supabase tokens
-- ✅ Next.js can make authenticated API calls
-- ✅ Roles are assigned correctly
+- ✅ Laravel issues Supabase JWT token
+- ✅ Next.js BFF validates Supabase JWT and calls Laravel with X-User-ID header
+- ✅ Laravel TrustedBffMiddleware validates internal API calls
 
 ---
 
@@ -1260,8 +1243,9 @@ CREATE INDEX idx_attendance_user_date ON attendance(user_id, clocked_at);
 
 **Day 3-5: Laravel Implementation**
 ```php
-// app/Modules/Attendance/Domain/AttendancePolicy.php
-class AttendancePolicy
+// app/Modules/Attendance/Domain/Rules/AttendanceRules.php
+// Note: This is a business rule validator, NOT a Laravel authorization policy
+class AttendanceRules
 {
     private const OFFICE_LAT = 3.1390;  // Update with your office
     private const OFFICE_LNG = 101.6869;
@@ -1309,7 +1293,8 @@ class AttendanceController extends Controller
 {
     public function clockIn(Request $request, ClockInHandler $handler)
     {
-        $this->authorize('clockIn', Attendance::class);
+        // User identity comes from TrustedBffMiddleware (X-User-ID header)
+        // No authorization check needed - Supabase RLS handles access control
         
         $validated = $request->validate([
             'latitude' => 'required|numeric',
@@ -1318,7 +1303,7 @@ class AttendanceController extends Controller
         ]);
         
         $command = new ClockInCommand(
-            userId: auth()->id(),
+            userId: $request->header('X-User-ID'), // From middleware
             latitude: $validated['latitude'],
             longitude: $validated['longitude'],
             wifiSsid: $validated['wifi_ssid'] ?? null,

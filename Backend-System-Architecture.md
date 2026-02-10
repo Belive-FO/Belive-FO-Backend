@@ -4,6 +4,98 @@
 
 ---
 
+## Authority Boundaries: Supabase-First Architecture
+
+### Core Principle: Single Source of Truth
+
+This system follows a **Supabase-first architecture** where authentication and authorization are handled by Supabase, while Laravel focuses exclusively on domain logic and business rules.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     AUTHORITY BOUNDARIES                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   SUPABASE (Single Source of Truth for Identity & Access)       │
+│   ├── JWT Token = User Identity                                  │
+│   ├── RLS Policies = "Who can see which rows"                    │
+│   └── Realtime = Secure data streaming                          │
+│                                                                  │
+│   LARAVEL (Domain Logic Engine - No Auth Responsibility)        │
+│   ├── Business Rules = "Under what conditions is X allowed"     │
+│   ├── Workflows = "What happens when X occurs"                   │
+│   ├── External APIs = Lark, notifications, OCR                  │
+│   └── Events/Queues = Async coordination                        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Eliminated Components
+
+The following Laravel components are **NOT used** in this architecture:
+
+- ❌ **Laravel Sanctum** - Replaced by Supabase JWT tokens
+- ❌ **Spatie Laravel Permission** - Replaced by Supabase RLS policies
+- ❌ **Laravel Authorization Policies** (as auth guards) - Replaced by domain rules
+
+### Retained Components
+
+The following components **ARE used** for business logic:
+
+- ✅ **Domain Services** - Business logic (geofence validation, leave balance calculation)
+- ✅ **Domain Rules/Validators** - Business rule validation (renamed from "Policies" to avoid confusion)
+- ✅ **Domain Events** - Cross-module coordination
+- ✅ **Adapters** - External API integrations (Lark, notifications)
+- ✅ **Spatie Laravel Activity Log** - Audit trail (independent of auth)
+
+### Responsibility Matrix
+
+| Responsibility | System | Implementation |
+|----------------|--------|----------------|
+| **User Identity** | Supabase | JWT token issued after Lark OAuth |
+| **Row-Level Access Control** | Supabase | RLS policies in PostgreSQL |
+| **Data Visibility** | Supabase | RLS filters queries automatically |
+| **Business Rules** | Laravel | Domain services (e.g., geofence validation) |
+| **Workflow Orchestration** | Laravel | Application handlers (e.g., leave approval flow) |
+| **External API Integration** | Laravel | Adapters (Lark, notifications, OCR) |
+| **Cross-Module Coordination** | Laravel | Domain events |
+| **Audit Trail** | Laravel | Spatie Activity Log (writes to DB) |
+| **Background Jobs** | Laravel | Queue system |
+
+### Request Flow Example: Clock-In
+
+```
+Request Flow (Clock-In Example):
+─────────────────────────────────────────────────────────────────
+1. Next.js receives clock-in request
+2. Next.js validates Supabase JWT (user identity confirmed)
+3. Next.js calls Laravel: POST /internal/attendance/clock-in
+   - Header: X-User-ID: 123 (extracted from Supabase JWT)
+   - Header: X-Internal-Key: [shared secret]
+4. Laravel trusts the identity (no re-auth needed)
+5. Laravel executes business logic (geofence, duplicate check)
+6. Laravel writes to Supabase DB (service role)
+7. Supabase Realtime broadcasts to user (filtered by RLS)
+```
+
+### Domain Rules vs Authorization Policies
+
+**Important:** The `Domain/Policies/` folders in modules contain **business rule validators**, NOT Laravel authorization policies. These should be renamed to `Domain/Rules/` or `Domain/Validators/` to avoid confusion.
+
+**Before (Laravel Policy - REMOVED):**
+```php
+$this->authorize('clockIn', Attendance::class);
+```
+
+**After (Domain Rule - KEPT):**
+```php
+$validation = $this->attendanceRules->canClockIn($userId, $location);
+if ($validation->failed()) {
+    throw new BusinessRuleViolationException($validation->errors());
+}
+```
+
+---
+
 ## What Makes It a TRUE Modular Monolith
 
 ### Core Principles (Non-Negotiable)
@@ -49,8 +141,8 @@ belive-api/
 │   │   │   ├── Domain/
 │   │   │   │   ├── Models/
 │   │   │   │   │   └── Attendance.php        # Attendance Eloquent model
-│   │   │   │   ├── Policies/
-│   │   │   │   │   └── AttendancePolicy.php
+│   │   │   │   ├── Rules/
+│   │   │   │   │   └── AttendanceRules.php   # Business rule validators (NOT auth policies)
 │   │   │   │   ├── Services/
 │   │   │   │   │   └── AttendanceService.php
 │   │   │   │   └── Events/
@@ -85,8 +177,8 @@ belive-api/
 │   │   │   ├── Domain/
 │   │   │   │   ├── Models/
 │   │   │   │   │   └── Leave.php              # Leave Eloquent model
-│   │   │   │   ├── Policies/
-│   │   │   │   │   └── LeavePolicy.php
+│   │   │   │   ├── Rules/
+│   │   │   │   │   └── LeaveRules.php         # Business rule validators (NOT auth policies)
 │   │   │   │   ├── Services/
 │   │   │   │   │   ├── LeaveService.php
 │   │   │   │   │   └── LeaveBalanceService.php

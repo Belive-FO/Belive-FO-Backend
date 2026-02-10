@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | BFF (Backend for Frontend) Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Shared secret between Next.js BFF and Laravel backend.
+    | This ensures only trusted Next.js instances can call Laravel APIs.
+    |
+    */
+    'bff' => [
+        'secret' => env('BFF_INTERNAL_SECRET'),
+    ],
+
 ];
