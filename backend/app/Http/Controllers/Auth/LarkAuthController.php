@@ -7,8 +7,10 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class LarkAuthController extends Controller
 {
@@ -23,6 +25,7 @@ class LarkAuthController extends Controller
 
         try {
             // 1. Exchange code for access token
+            /** @var \Illuminate\Http\Client\Response $tokenResponse */
             $tokenResponse = Http::post('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal', [
                 'app_id' => config('services.lark.app_id'),
                 'app_secret' => config('services.lark.app_secret'),
@@ -39,6 +42,7 @@ class LarkAuthController extends Controller
             $accessToken = $tokenResponse->json('tenant_access_token');
 
             // 2. Get user info from Lark
+            /** @var \Illuminate\Http\Client\Response $userResponse */
             $userResponse = Http::withToken($accessToken)
                 ->get('https://open.larksuite.com/open-apis/authen/v1/access_token', [
                     'grant_type' => 'authorization_code',
@@ -62,6 +66,7 @@ class LarkAuthController extends Controller
                     'email' => $larkUser['email'] ?? null,
                     'name' => $larkUser['name'] ?? 'Unknown',
                     'lark_open_id' => $larkUser['open_id'] ?? null,
+                    'password' => Hash::make(Str::random(32)),
                 ]
             );
 
@@ -89,6 +94,32 @@ class LarkAuthController extends Controller
 
             return response()->json(['error' => 'Authentication failed'], 500);
         }
+    }
+
+    /**
+     * Login with email and password.
+     */
+    public function login(Request $request): JsonResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required'],
+        ]);
+
+        if (!Auth::attempt($credentials)) {
+            return response()->json([
+                'message' => 'Invalid credentials.',
+            ], 401);
+        }
+
+        $request->session()->regenerate();
+
+        $user = $request->user()->load('roles');
+
+        return response()->json([
+            'user' => $user,
+            'message' => 'Login successful',
+        ]);
     }
 
     /**

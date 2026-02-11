@@ -4,8 +4,10 @@ use App\Http\Controllers\Auth\LarkAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Public routes
+// Public auth routes
 Route::post('/auth/lark/callback', [LarkAuthController::class, 'callback']);
+Route::post('/auth/login', [LarkAuthController::class, 'login'])
+    ->middleware('throttle:5,1');
 
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
