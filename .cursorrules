@@ -38,10 +38,10 @@ User → Next.js (sends session cookie) → Laravel (Sanctum validates, Policy c
 
 ### Directory Structure
 
-- Business rules live in `Domain/Rules/` (NOT `Domain/Policies/`)
-- Business logic in `Domain/Services/`
-- External APIs in `Infrastructure/Adapters/`
-- Use cases in `Application/UseCases/`
+- Business rules live in `Rules/` (NOT `Policies/`)
+- Business logic in `Services/`
+- External APIs in `Adapters/`
+- Controllers in `Controllers/`
 
 ## Documentation Maintenance
 
@@ -49,14 +49,14 @@ User → Next.js (sends session cookie) → Laravel (Sanctum validates, Policy c
 
 1. Search `@docs` for related architectural decisions
 2. Check if your change affects auth flow, module boundaries, or external integrations
-3. Review relevant ADRs in `ARCHITECTURE-DECISIONS.md`
+3. Review relevant ADRs in `ARCHITECTURE.md`
 
 ### After Making Changes
 
 1. Update affected documentation immediately
-2. If you modify auth flow → update `Backend-System-Architecture.md` and `ARCHITECTURE-DECISIONS.md`
-3. If you add/remove packages → update `backend/README.md` and `Belive-FO-Implementation-Plan.md`
-4. If you make architectural decisions → add ADR to `ARCHITECTURE-DECISIONS.md`
+2. If you modify auth flow → update `ARCHITECTURE.md`
+3. If you add/remove packages → update `backend/README.md` and `IMPLEMENTATION.md`
+4. If you make architectural decisions → add ADR to `ARCHITECTURE.md`
 
 ### Creating New ADRs
 
@@ -139,7 +139,7 @@ $userId = $request->header('X-User-ID'); // OLD - Don't use
 
 ## When in Doubt
 
-1. Check `@docs/ARCHITECTURE-DECISIONS.md` first
+1. Check `@docs/ARCHITECTURE.md` first
 2. Search the docs folder for similar patterns
 3. Ask the user before introducing new patterns
 4. Never assume—verify against documentation

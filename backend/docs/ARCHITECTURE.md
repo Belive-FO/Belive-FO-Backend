@@ -225,6 +225,81 @@ $validation = $this->attendanceRules->canClockIn($user->id, $location);
 
 ---
 
+## ADR-005: Simplified Modular Structure
+
+**Status:** Accepted  
+**Date:** 2026-02-XX  
+**Decision Makers:** Architecture Team
+
+### Context
+
+The initial module structure followed a deep DDD (Domain-Driven Design) layering pattern:
+- `Domain/Models/`, `Domain/Services/`, `Domain/Rules/`, `Domain/Events/`
+- `Application/UseCases/`, `Application/DTOs/`
+- `Infrastructure/Persistence/`, `Infrastructure/Adapters/`
+- `Presentation/Http/Controllers/`
+
+This resulted in **47 directories but only 14 PHP files**, with most directories empty. The deep nesting added complexity without providing value at this stage of the project.
+
+### Decision
+
+Flatten the module structure to a simplified modular layout:
+- Remove `Domain/`, `Application/`, `Infrastructure/`, `Presentation/` nesting
+- Use flat directories: `Models/`, `Services/`, `Rules/`, `Controllers/`, `Events/`, `Adapters/`
+- Keep module boundaries and communication patterns (Contracts, Events) unchanged
+
+### Rationale
+
+1. **Reduced Complexity**: Fewer directory levels make navigation easier
+2. **YAGNI Principle**: Deep DDD layering is premature for current scale
+3. **Laravel Conventions**: Aligns better with Laravel's standard structure
+4. **Maintainability**: Easier to find files and understand module organization
+5. **Module Boundaries Preserved**: Still maintains modular monolith principles
+
+### Consequences
+
+#### New Structure
+
+```
+Modules/
+├── Attendance/
+│   ├── AttendanceServiceProvider.php
+│   ├── Services/
+│   │   └── AttendanceService.php
+│   ├── Models/
+│   ├── Rules/
+│   ├── Controllers/
+│   ├── Events/
+│   └── Adapters/
+├── Leave/
+│   └── [Similar structure]
+└── Claims/
+    └── [Similar structure]
+```
+
+#### Namespace Changes
+
+- `App\Modules\Attendance\Domain\Services\AttendanceService` → `App\Modules\Attendance\Services\AttendanceService`
+- `App\Modules\Attendance\Domain\Rules\AttendanceRules` → `App\Modules\Attendance\Rules\AttendanceRules`
+- `App\Modules\Attendance\Presentation\Http\Controllers\AttendanceController` → `App\Modules\Attendance\Controllers\AttendanceController`
+
+#### What Remains Unchanged
+
+- ✅ Module boundaries and independence
+- ✅ Communication via `Shared/Contracts` interfaces
+- ✅ Domain events for cross-module coordination
+- ✅ Authorization (Policies) and business validation (Rules) separation
+- ✅ Vendor independence via Adapters pattern
+
+#### Removed Patterns
+
+- ❌ Command/Handler pattern (controllers call Services directly)
+- ❌ DTOs folder (use Laravel Form Requests and API Resources)
+- ❌ Persistence folder (Eloquent models are the repository)
+- ❌ Deep nesting (Domain/Application/Infrastructure/Presentation)
+
+---
+
 # System Architecture
 
 ## Authority Boundaries: Laravel-First Architecture
@@ -331,7 +406,7 @@ Request Flow (Clock-In Example):
    - Checks relationships (e.g., "Is user a manager of this employee?")
    - Example: `AttendancePolicy::create($user)` checks if user has `attendance.create` permission
 
-2. **Domain Rules** (`app/Modules/*/Domain/Rules/`) - Handle **business validation**: "Under what conditions is X allowed?"
+2. **Domain Rules** (`app/Modules/*/Rules/`) - Handle **business validation**: "Under what conditions is X allowed?"
    - Checks business conditions (geofence, leave balance, etc.)
    - Example: `AttendanceRules::isWithinGeofence($lat, $lng)` checks if location is valid
 
@@ -418,40 +493,20 @@ belive-api/
 │   │   │       └── Money.php
 │   │   │
 │   │   ├── Attendance/
-│   │   │   ├── Domain/
-│   │   │   │   ├── Models/
-│   │   │   │   │   └── Attendance.php        # Attendance Eloquent model
-│   │   │   │   ├── Rules/                    # Business rule validators
-│   │   │   │   │   └── AttendanceRules.php   # NOT authorization policies
-│   │   │   │   ├── Services/
-│   │   │   │   │   └── AttendanceService.php
-│   │   │   │   └── Events/
-│   │   │   │       ├── AttendanceClockedIn.php
-│   │   │   │       └── AttendanceClockedOut.php
-│   │   │   │
-│   │   │   ├── Application/
-│   │   │   │   ├── UseCases/
-│   │   │   │   │   ├── ClockIn/
-│   │   │   │   │   │   ├── ClockInCommand.php
-│   │   │   │   │   │   └── ClockInHandler.php
-│   │   │   │   │   └── ClockOut/
-│   │   │   │   │       ├── ClockOutCommand.php
-│   │   │   │   │       └── ClockOutHandler.php
-│   │   │   │   └── DTOs/
-│   │   │   │       └── AttendanceDTO.php
-│   │   │   │
-│   │   │   ├── Infrastructure/
-│   │   │   │   ├── Persistence/
-│   │   │   │   │   └── AttendanceRepository.php
-│   │   │   │   └── Adapters/
-│   │   │   │       └── SupabaseAdapter.php
-│   │   │   │
-│   │   │   ├── Presentation/
-│   │   │   │   └── Http/
-│   │   │   │       └── Controllers/
-│   │   │   │           └── AttendanceController.php
-│   │   │   │
-│   │   │   └── AttendanceServiceProvider.php  # Module registration
+│   │   │   ├── AttendanceServiceProvider.php  # Module registration
+│   │   │   ├── Services/
+│   │   │   │   └── AttendanceService.php      # Business logic
+│   │   │   ├── Models/
+│   │   │   │   └── Attendance.php             # Attendance Eloquent model
+│   │   │   ├── Rules/
+│   │   │   │   └── AttendanceRules.php        # Business rule validators (NOT authorization policies)
+│   │   │   ├── Controllers/
+│   │   │   │   └── AttendanceController.php   # HTTP controllers
+│   │   │   ├── Events/
+│   │   │   │   ├── AttendanceClockedIn.php
+│   │   │   │   └── AttendanceClockedOut.php
+│   │   │   └── Adapters/
+│   │   │       └── LarkAdapter.php            # External API integrations (when needed)
 │   │   │
 │   │   ├── Leave/
 │   │   │   └── [Similar structure]
@@ -480,9 +535,9 @@ belive-api/
 
 ```php
 // ❌ WRONG - Leave module directly accessing Attendance model
-namespace App\Modules\Leave\Application;
+namespace App\Modules\Leave;
 
-use App\Modules\Attendance\Domain\Models\Attendance;  // ❌ FORBIDDEN!
+use App\Modules\Attendance\Models\Attendance;  // ❌ FORBIDDEN!
 
 class LeaveService 
 {
@@ -506,7 +561,7 @@ class LeaveService
 
 ```php
 // ✅ CORRECT - Attendance publishes event
-namespace App\Modules\Attendance\Domain\Services;
+namespace App\Modules\Attendance\Services;
 
 use App\Modules\Shared\Events\AttendanceClockedIn;
 
@@ -528,7 +583,7 @@ class AttendanceService
 }
 
 // ✅ CORRECT - Leave listens to event
-namespace App\Modules\Leave\Infrastructure\Listeners;
+namespace App\Modules\Leave\Listeners;
 
 use App\Modules\Shared\Events\AttendanceClockedIn;
 
@@ -560,7 +615,7 @@ interface AttendanceServiceInterface
 }
 
 // Attendance implements it
-namespace App\Modules\Attendance\Domain\Services;
+namespace App\Modules\Attendance\Services;
 
 use App\Modules\Shared\Contracts\AttendanceServiceInterface;
 
@@ -582,29 +637,29 @@ class AttendanceService implements AttendanceServiceInterface
 }
 
 // Leave uses the interface (NOT the concrete class)
-namespace App\Modules\Leave\Application\UseCases\SubmitLeave;
+namespace App\Modules\Leave;
 
 use App\Modules\Shared\Contracts\AttendanceServiceInterface;
 
-class SubmitLeaveHandler 
+class LeaveService 
 {
     public function __construct(
         private AttendanceServiceInterface $attendanceService  // ✅ Depends on interface
     ) {}
     
-    public function handle(SubmitLeaveCommand $command) 
+    public function canTakeLeave(int $userId, DateRange $period): bool 
     {
         // ✅ Call through interface
         $attendanceCount = $this->attendanceService->getUserAttendanceCount(
-            $command->userId,
-            new DateRange(now()->startOfYear(), now())
+            $userId,
+            $period
         );
         
         if ($attendanceCount < 100) {
-            throw new InsufficientAttendanceException();
+            return false;
         }
         
-        // Proceed with leave creation...
+        return true;
     }
 }
 
@@ -740,8 +795,8 @@ app/Models/
 ```php
 // ✅ DO - Each module owns its models
 app/Modules/
-├── Attendance/Domain/Models/Attendance.php
-├── Leave/Domain/Models/Leave.php
+├── Attendance/Models/Attendance.php
+├── Leave/Models/Leave.php
 └── Shared/
     ├── Contracts/UserServiceInterface.php  # Interface only
     └── ValueObjects/UserId.php             # Value object (no DB)
@@ -755,7 +810,7 @@ app/Services/
 └── AttendanceService.php  ← Used by multiple modules
 
 // ✅ DO
-app/Modules/Attendance/Domain/Services/AttendanceService.php
+app/Modules/Attendance/Services/AttendanceService.php
 app/Modules/Shared/Contracts/AttendanceServiceInterface.php
 ```
 
