@@ -4,34 +4,31 @@
 
 Follow this sequence to understand the system architecture:
 
-1. **[ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md)** - Why we made key architectural choices
-2. **[Backend-System-Architecture.md](Backend-System-Architecture.md)** - System design and boundaries
-3. **[TRUSTED_BFF_MIDDLEWARE.md](TRUSTED_BFF_MIDDLEWARE.md)** - Security model
-4. **[MODULE_STRUCTURE.md](MODULE_STRUCTURE.md)** - Code organization
-5. **[Belive-FO-Implementation-Plan.md](Belive-FO-Implementation-Plan.md)** - Implementation roadmap
-6. **[TEST_PLAN.md](TEST_PLAN.md)** - Testing strategy
-7. **[SUPABASE_SEEDING.md](SUPABASE_SEEDING.md)** - Database seeding guide
-8. **[LARAVEL_BOOST_INSTALLATION.md](LARAVEL_BOOST_INSTALLATION.md)** - Dev tooling setup
+1. **[ARCHITECTURE.md](ARCHITECTURE.md)** - Architecture decisions and system design
+2. **[IMPLEMENTATION.md](IMPLEMENTATION.md)** - Implementation roadmap and code examples
+3. **[DEVELOPMENT.md](DEVELOPMENT.md)** - Testing strategy and database seeding
 
 ## Quick Reference
 
 ### Architecture at a Glance
 
-- **Authentication**: Lark OAuth → Laravel validates → Laravel generates Supabase JWT
-- **JWT Validation**: Next.js BFF validates on every request
-- **Authorization**: Supabase RLS policies
+- **Authentication**: Lark OAuth → Laravel validates → Laravel creates session (Sanctum SPA)
+- **Authorization**: Laravel Policies + Spatie Permission (RBAC)
+- **Business Validation**: Domain Rules (separate from authorization)
+- **Database**: Supabase PostgreSQL (plain database, no RLS)
+- **Storage**: Supabase Storage (S3-compatible)
 - **Business Logic**: Laravel Domain Services
 - **Module Communication**: Contracts & Events only
 
-### Key Files
+### Components Used
 
-- [Architecture Decisions](ARCHITECTURE-DECISIONS.md) - Authoritative source for "why"
-- [System Architecture](Backend-System-Architecture.md) - Authoritative source for "what"
-- [Security Model](TRUSTED_BFF_MIDDLEWARE.md) - Authoritative source for "how"
+- ✅ Laravel Sanctum (SPA mode for session-based authentication)
+- ✅ Spatie Permission (roles and permissions management)
+- ✅ Laravel Policies (authorization checks)
+- ✅ Domain Rules (business validation, separate from authorization)
 
-### Not Used
+### Key Documents
 
-- ❌ Laravel Sanctum (replaced by Supabase JWT)
-- ❌ Spatie Permission (replaced by Supabase RLS)
-- ❌ Laravel Policies for auth (use Domain Rules for business logic)
-
+- [Architecture](ARCHITECTURE.md) - Complete architecture documentation (ADRs + System Design)
+- [Implementation](IMPLEMENTATION.md) - Step-by-step implementation guide
+- [Development](DEVELOPMENT.md) - Testing and database seeding guides

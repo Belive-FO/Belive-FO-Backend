@@ -37,15 +37,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | BFF (Backend for Frontend) Configuration
+    | Lark Configuration
     |--------------------------------------------------------------------------
     |
-    | Shared secret between Next.js BFF and Laravel backend.
-    | This ensures only trusted Next.js instances can call Laravel APIs.
+    | Lark OAuth credentials for authentication.
     |
     */
-    'bff' => [
-        'secret' => env('BFF_INTERNAL_SECRET'),
+    'lark' => [
+        'app_id' => env('LARK_APP_ID'),
+        'app_secret' => env('LARK_APP_SECRET'),
     ],
 
 ];

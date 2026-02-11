@@ -26,16 +26,15 @@ cd belive-flowoffice
 
 #### 2. Essential Packages
 
-**Supabase Bridge (CRITICAL)**
+**Supabase Bridge (Database & Storage)**
 ```bash
 composer require saeedvir/supabase
 ```
 
 **What it does:**
-- Enables Laravel to generate Supabase-compatible JWT tokens
 - Connects Laravel to Supabase Postgres database
-- Enables Realtime subscriptions from Laravel
 - Manages Supabase Storage (file uploads/downloads)
+- Note: No JWT generation or RLS - Laravel handles auth/authorization
 
 **Configuration:**
 ```php
@@ -53,7 +52,7 @@ return [
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-SUPABASE_JWT_SECRET=your-super-secret-jwt-secret-at-least-32-characters
+# Note: SUPABASE_JWT_SECRET no longer needed - Laravel handles auth
 ```
 
 **Usage Examples:**
@@ -79,13 +78,8 @@ $path = Storage::disk('supabase')
 $url = Storage::disk('supabase')
     ->temporaryUrl($path, now()->addHour());
 
-// 4. Listen to Realtime changes
-$supabase->realtime()
-    ->channel('attendance-changes')
-    ->on('INSERT', 'public', 'attendance', function($payload) {
-        broadcast(new AttendanceRecorded($payload['record']));
-    })
-    ->subscribe();
+// Note: Realtime is handled via polling or Laravel Reverb (not Supabase Realtime)
+// For MVP, use TanStack Query polling or Lark Bot API for notifications
 ```
 
 **Laravel Boost (AI Development Assistant)**
@@ -119,25 +113,34 @@ Prompt: "Using Laravel Boost context, create a Leave model with:
 - Activity logging enabled"
 ```
 
+**Authentication & Authorization**
+```bash
+composer require laravel/sanctum
+composer require spatie/laravel-permission
+```
+
+**What they do:**
+- **Laravel Sanctum**: SPA mode for session-based authentication
+- **Spatie Permission**: Roles and permissions management (RBAC)
+- **Laravel Policies**: Fine-grained authorization checks
+
 **Audit Trail**
 ```bash
 composer require spatie/laravel-activitylog
 ```
 
-> **Note:** Laravel Sanctum and Spatie Permissions are **NOT used** in this architecture.
-- **Authentication**: Laravel validates Lark OAuth and generates JWT tokens
-- **Authorization**: Supabase RLS policies use JWT tokens to filter data
-- **JWT Validation**: Next.js BFF validates JWT on subsequent requests
-See `Backend-System-Architecture.md` for details on the Supabase-first architecture.
+> **Note:** This architecture uses **Laravel-first** authentication and authorization.
+- **Authentication**: Laravel Sanctum (SPA mode) with session cookies
+- **Authorization**: Laravel Policies + Spatie Permission (RBAC)
+- **Business Validation**: Domain Rules (separate from authorization)
+- **Supabase**: Used only for PostgreSQL database and file storage (no RLS, no JWT)
+See `Backend-System-Architecture.md` for details on the Laravel-first architecture.
 
 ### Frontend Dependencies
 
 ```bash
 npx create-next-app@latest belive-fo-frontend --typescript --tailwind --app
 cd belive-fo-frontend
-
-# Supabase client for Realtime
-npm install @supabase/supabase-js
 
 # State management
 npm install @tanstack/react-query zustand
@@ -155,85 +158,75 @@ npx shadcn-ui@latest add button form input calendar select table
 | Service | Purpose | Cost |
 |---------|---------|------|
 | **Vercel** | Next.js hosting | Free tier available |
-| **Supabase** | Database + Realtime + Storage | Free tier: 500MB DB, 1GB storage |
+| **Supabase** | Database + Storage (PostgreSQL + S3-compatible) | Free tier: 500MB DB, 1GB storage |
 | **Lark/Feishu** | OAuth + Approvals + Mobile | Free for companies <500 employees |
 
 ---
 
 ## Key Concepts Explained
 
-### 1. What is Row-Level Security (RLS)?
+### 1. Authorization Architecture (Laravel Policies + Spatie Permission)
 
 **Simple Explanation:**
-Row-Level Security is like having a security guard at the database level who checks "Is this person allowed to see this specific row of data?"
+Authorization in this system uses Laravel Policies (for fine-grained checks) and Spatie Permission (for roles/permissions). This provides a clear separation between "who can do what" (authorization) and "under what conditions" (business validation).
 
-**Example:**
+**Two-Layer Approach:**
 
-Without RLS:
-```sql
--- Anyone with database access can see ALL attendance records
-SELECT * FROM attendance;
--- Returns: All 10,000 employee attendance records
+1. **Laravel Policies** (`app/Policies/`) - Handle authorization: "Can this user do X?"
+   - Checks user roles/permissions (via Spatie)
+   - Checks relationships (e.g., "Is user a manager of this employee?")
+   - Example: `AttendancePolicy::create($user)` checks if user has `attendance.create` permission
+
+2. **Domain Rules** (`app/Modules/*/Domain/Rules/`) - Handle business validation: "Under what conditions is X allowed?"
+   - Checks business conditions (geofence, leave balance, etc.)
+   - Example: `AttendanceRules::isWithinGeofence($lat, $lng)` checks if location is valid
+
+**Code Pattern:**
+
+```php
+// In Controller
+public function clockIn(Request $request)
+{
+    // 1. Authorization check (Policy)
+    $this->authorize('create', Attendance::class);
+    
+    // 2. Get authenticated user
+    $user = $request->user();
+    
+    // 3. Business validation (Domain Rules)
+    $validation = $this->attendanceRules->canClockIn($user->id, $location);
+    if ($validation->failed()) {
+        throw new BusinessRuleViolationException($validation->errors());
+    }
+    
+    // 4. Execute business logic
+    $attendance = $this->attendanceService->clockIn($user->id, $location);
+    
+    return response()->json($attendance);
+}
 ```
 
-With RLS:
-```sql
--- Create policy: Users can only see their own records
-CREATE POLICY "users_see_own_attendance"
-ON attendance FOR SELECT
-USING (auth.uid()::text = user_id::text);
-
--- Now when Employee #123 queries:
-SELECT * FROM attendance;
--- Returns: Only Employee #123's records (automatic filtering!)
-```
-
-**Why this matters:**
+**Why this approach:**
 
 ```
-❌ Without RLS:
-Next.js → Supabase query → Returns ALL data
-         → Next.js must filter in JavaScript
-         → Security risk if filtering code has bugs
+✅ Clear Separation:
+   - Policies = "Can user X do action Y?" (authorization)
+   - Domain Rules = "Is action Y valid under these conditions?" (business validation)
 
-✅ With RLS:
-Next.js → Supabase query → Database filters automatically
-         → Impossible to bypass (even with SQL injection)
-         → Returns only authorized data
+✅ Easy to Test:
+   - Policies can be unit tested without database
+   - Domain Rules can be tested independently
+
+✅ Flexible:
+   - Easy to add complex authorization logic (department-based, time-based, etc.)
+   - Business rules stay in PHP (easier to maintain than SQL policies)
+
+✅ Standard Laravel Patterns:
+   - Uses well-established Laravel authentication and authorization
+   - Familiar to Laravel developers
 ```
 
-**Real-world scenario:**
-
-```
-Manager tries to view team attendance:
-
-1. Manager logs in → Gets JWT with { user_id: "456", role: "manager" }
-2. Next.js queries: SELECT * FROM attendance
-3. RLS policy checks:
-   - Is auth.uid() = user_id? NO
-   - Is user a manager of this employee? YES (separate policy)
-   - Returns: Only team members' data
-
-Employee tries same query:
-1. Employee logs in → Gets JWT with { user_id: "123", role: "employee" }
-2. Next.js queries: SELECT * FROM attendance  
-3. RLS policy checks:
-   - Is auth.uid() = user_id? YES
-   - Returns: Only their own data
-```
-
-**Our RLS Strategy:**
-
-```sql
--- Defense in Depth: Simple rules only
-CREATE POLICY "employees_read_own_attendance"
-ON attendance FOR SELECT
-USING (auth.uid()::text = user_id::text);
-
--- Laravel remains authoritative for complex rules
--- Example: "Manager can approve IF leave < 5 days AND not unpaid"
--- ↑ This stays in PHP (too complex for SQL)
-```
+**Note:** Supabase RLS is **not used** in this architecture. Laravel Policies handle all authorization at the application level.
 
 ### 2. What is Vendor Independence?
 
@@ -1111,13 +1104,19 @@ composer create-project laravel/laravel belive-api
 cd belive-api
 
 # Install dependencies
+composer require laravel/sanctum
+composer require spatie/laravel-permission
 composer require saeedvir/supabase
 composer require spatie/laravel-activitylog
 composer require --dev laravel/boost
 composer require --dev barryvdh/laravel-ide-helper
 
-# Note: Laravel Sanctum and Spatie Permissions are NOT used.
-# Authentication/authorization handled by Supabase (JWT + RLS).
+# Setup Sanctum
+php artisan install:api
+
+# Setup Spatie Permission
+php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+php artisan migrate
 
 # Generate IDE helper
 php artisan ide-helper:generate
@@ -1130,7 +1129,10 @@ php artisan ide-helper:models
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_KEY=your-anon-key
 SUPABASE_SECRET=your-service-role-key
-SUPABASE_JWT_SECRET=your-jwt-secret-32-chars-min
+# Note: SUPABASE_JWT_SECRET no longer needed
+
+# Sanctum SPA configuration
+SANCTUM_STATEFUL_DOMAINS=localhost:3000,belive.company.com
 
 # Test connection
 php artisan tinker
@@ -1142,10 +1144,10 @@ php artisan tinker
 #### Day 5-7: Lark OAuth Integration
 ```php
 // routes/api.php
-Route::post('/auth/lark/callback', [AuthController::class, 'larkCallback']);
+Route::post('/auth/lark/callback', [LarkAuthController::class, 'callback']);
 
-// app/Http/Controllers/Auth/AuthController.php
-public function larkCallback(Request $request)
+// app/Http/Controllers/Auth/LarkAuthController.php
+public function callback(Request $request)
 {
     // 1. Exchange code for access token
     $tokenResponse = Http::post('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal', [
@@ -1170,20 +1172,16 @@ public function larkCallback(Request $request)
         [
             'email' => $larkUser['email'],
             'name' => $larkUser['name'],
+            'lark_open_id' => $larkUser['open_id'],
         ]
     );
     
-    // 4. Generate Supabase JWT token
-    // Laravel is responsible for JWT generation after successful authentication
-    // This JWT will be validated by Next.js BFF and used by Supabase RLS
-    $supabaseToken = app(SupabaseJwtService::class)->generateToken($user);
-    
-    // Note: No Sanctum token needed. Next.js BFF will use Supabase JWT
-    // and pass user identity to Laravel via X-User-ID header.
+    // 4. Create session (Sanctum SPA mode)
+    Auth::login($user);
     
     return response()->json([
         'user' => $user,
-        'supabase_token' => $supabaseToken,
+        'message' => 'Login successful',
     ]);
 }
 ```
@@ -1193,7 +1191,6 @@ public function larkCallback(Request $request)
 npx create-next-app@latest belive-frontend --typescript --tailwind --app
 cd belive-frontend
 
-npm install @supabase/supabase-js
 npm install @tanstack/react-query zustand
 npm install react-hook-form @hookform/resolvers zod
 npx shadcn-ui@latest init
@@ -1202,9 +1199,10 @@ npx shadcn-ui@latest add button form input
 
 **Success Criteria:**
 - ✅ User can log in via Lark OAuth
-- ✅ Laravel issues Supabase JWT token
-- ✅ Next.js BFF validates Supabase JWT and calls Laravel with X-User-ID header
-- ✅ Laravel TrustedBffMiddleware validates internal API calls
+- ✅ Laravel creates session (Sanctum SPA mode)
+- ✅ Next.js calls Laravel API with session cookie
+- ✅ Laravel Sanctum validates session
+- ✅ Laravel Policies check authorization
 
 ---
 
@@ -1216,7 +1214,7 @@ npx shadcn-ui@latest add button form input
 
 **Day 1-2: Database Schema**
 ```sql
--- Create table in Supabase
+-- Create table in Supabase (plain PostgreSQL, no RLS)
 CREATE TABLE attendance (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id),
@@ -1230,18 +1228,7 @@ CREATE TABLE attendance (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Enable RLS
-ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
-
--- Policy: Users see own records
-CREATE POLICY "users_see_own_attendance"
-ON attendance FOR SELECT
-USING (auth.uid()::text = user_id::text);
-
--- Policy: Users can insert own records
-CREATE POLICY "users_insert_own_attendance"
-ON attendance FOR INSERT
-WITH CHECK (auth.uid()::text = user_id::text);
+-- Note: No RLS policies - Laravel Policies handle authorization
 
 -- Index for performance
 CREATE INDEX idx_attendance_user_date ON attendance(user_id, clocked_at);
@@ -1299,8 +1286,11 @@ class AttendanceController extends Controller
 {
     public function clockIn(Request $request, ClockInHandler $handler)
     {
-        // User identity comes from TrustedBffMiddleware (X-User-ID header)
-        // No authorization check needed - Supabase RLS handles access control
+        // 1. Authorization check (Policy)
+        $this->authorize('create', Attendance::class);
+        
+        // 2. Get authenticated user
+        $user = $request->user();
         
         $validated = $request->validate([
             'latitude' => 'required|numeric',
@@ -1309,7 +1299,7 @@ class AttendanceController extends Controller
         ]);
         
         $command = new ClockInCommand(
-            userId: $request->header('X-User-ID'), // From middleware
+            userId: $user->id, // From authenticated session
             latitude: $validated['latitude'],
             longitude: $validated['longitude'],
             wifiSsid: $validated['wifi_ssid'] ?? null,
