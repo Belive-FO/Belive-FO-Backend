@@ -35,16 +35,31 @@ class LarkAuthController extends Controller
                 Log::error('Lark token exchange failed', [
                     'status' => $tokenResponse->status(),
                     'body' => $tokenResponse->body(),
+                    'json' => $tokenResponse->json(),
                 ]);
-                return response()->json(['error' => 'Failed to authenticate with Lark'], 401);
+                
+                return response()->json([
+                    'error' => 'Failed to authenticate with Lark',
+                    'details' => config('app.debug') ? $tokenResponse->json() : null,
+                ], 401);
             }
 
             $accessToken = $tokenResponse->json('tenant_access_token');
+            
+            if (!$accessToken) {
+                Log::error('Lark tenant access token missing', [
+                    'response' => $tokenResponse->json(),
+                ]);
+                return response()->json([
+                    'error' => 'Failed to get access token from Lark',
+                    'details' => config('app.debug') ? $tokenResponse->json() : null,
+                ], 401);
+            }
 
             // 2. Get user info from Lark
             /** @var \Illuminate\Http\Client\Response $userResponse */
             $userResponse = Http::withToken($accessToken)
-                ->get('https://open.larksuite.com/open-apis/authen/v1/access_token', [
+                ->post('https://open.larksuite.com/open-apis/authen/v1/access_token', [
                     'grant_type' => 'authorization_code',
                     'code' => $request->code,
                 ]);
@@ -53,29 +68,54 @@ class LarkAuthController extends Controller
                 Log::error('Lark user info fetch failed', [
                     'status' => $userResponse->status(),
                     'body' => $userResponse->body(),
+                    'json' => $userResponse->json(),
+                    'code' => $request->code,
                 ]);
-                return response()->json(['error' => 'Failed to fetch user info from Lark'], 401);
+                
+                return response()->json([
+                    'error' => 'Failed to fetch user info from Lark',
+                    'details' => config('app.debug') ? [
+                        'status' => $userResponse->status(),
+                        'response' => $userResponse->json(),
+                    ] : null,
+                ], 401);
             }
 
             $larkUser = $userResponse->json('data');
+            
+            // Add validation for user data - Lark OAuth returns open_id, not user_id
+            if (!$larkUser || !isset($larkUser['open_id'])) {
+                Log::error('Invalid Lark user data', [
+                    'response' => $userResponse->json(),
+                ]);
+                
+                return response()->json([
+                    'error' => 'Invalid user data from Lark',
+                    'details' => config('app.debug') ? $userResponse->json() : null,
+                ], 401);
+            }
 
-            // 3. Find or create user
+            // 3. Find or create user using open_id (Lark OAuth primary identifier)
             $user = User::firstOrCreate(
-                ['lark_user_id' => $larkUser['user_id']],
+                ['lark_open_id' => $larkUser['open_id']],
                 [
                     'email' => $larkUser['email'] ?? null,
                     'name' => $larkUser['name'] ?? 'Unknown',
-                    'lark_open_id' => $larkUser['open_id'] ?? null,
+                    'lark_union_id' => $larkUser['union_id'] ?? null,
+                    'lark_user_id' => $larkUser['user_id'] ?? null, // May be null if not provided
+                    'avatar_url' => $larkUser['avatar_url'] ?? null,
                     'password' => Hash::make(Str::random(32)),
                 ]
             );
 
-            // Update user if email or name changed
+            // Update user if email, name, or other fields changed
             if ($user->wasRecentlyCreated === false) {
                 $user->update([
                     'email' => $larkUser['email'] ?? $user->email,
                     'name' => $larkUser['name'] ?? $user->name,
-                    'lark_open_id' => $larkUser['open_id'] ?? $user->lark_open_id,
+                    'lark_union_id' => $larkUser['union_id'] ?? $user->lark_union_id,
+                    'lark_user_id' => $larkUser['user_id'] ?? $user->lark_user_id,
+                    'avatar_url' => $larkUser['avatar_url'] ?? $user->avatar_url,
                 ]);
             }
 
@@ -90,9 +130,19 @@ class LarkAuthController extends Controller
             Log::error('Lark authentication error', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
 
-            return response()->json(['error' => 'Authentication failed'], 500);
+            return response()->json([
+                'error' => 'Authentication failed',
+                'message' => config('app.debug') ? $e->getMessage() : 'Authentication failed',
+                'details' => config('app.debug') ? [
+                    'exception' => get_class($e),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ] : null,
+            ], 500);
         }
     }
 
