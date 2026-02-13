@@ -173,14 +173,15 @@ class LarkAuthController extends Controller
     }
 
     /**
-     * Logout user
+     * Logout user.
+     * Idempotent: returns 200 even when not authenticated (no session to invalidate).
      */
     public function logout(Request $request): JsonResponse
     {
-        Auth::logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        if ($request->user()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json(['message' => 'Logged out successfully']);
     }
