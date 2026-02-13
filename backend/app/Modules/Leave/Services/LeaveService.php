@@ -19,4 +19,3 @@ class LeaveService implements LeaveServiceInterface
     }
 }
 
-

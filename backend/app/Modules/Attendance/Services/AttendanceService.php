@@ -20,4 +20,3 @@ class AttendanceService implements AttendanceServiceInterface
     }
 }
 
-
