@@ -14,19 +14,19 @@ When starting work on this project, ALWAYS read documentation in this sequence:
 
 ### Laravel-First Authentication & Authorization
 
-- ✅ **Laravel Sanctum** (SPA mode) handles authentication with session cookies
+- ✅ **Laravel Sanctum** (API tokens, Bearer) handles authentication; token is stored in an httpOnly cookie; the frontend uses a **thin BFF** (Next.js App Router Route Handlers) that forwards requests to Laravel with `Authorization: Bearer <token>`.
 - ✅ **Laravel Policies** handle authorization checks ("Can user X do Y?")
 - ✅ **Spatie Permission** handles roles and permissions (RBAC)
 - ✅ **Domain Rules** handle business validation ("Under what conditions?")
 - ✅ **Supabase** provides PostgreSQL database and file storage only (no RLS, no JWT)
 - ❌ **DO NOT** use Supabase JWT or RLS for authentication/authorization
-- ❌ **DO NOT** use BFF pattern or custom middleware for auth
+- ❌ **DO NOT** use a trusted BFF (e.g. X-User-ID header); Laravel must receive and validate the Bearer token itself.
 
 ### Request Flow Pattern
 
 ```
-User → Lark OAuth → Laravel (validates, creates session) → User receives session cookie
-User → Next.js (sends session cookie) → Laravel (Sanctum validates, Policy checks authorization)
+User → Lark OAuth → Laravel (validates, returns token) → Next.js sets httpOnly cookie (and optionally redirects).
+User → Next.js (sends cookie) → Next.js thin BFF (route.ts) → Laravel (Sanctum validates Bearer, Policy checks authorization).
 ```
 
 ### Modular Monolith Rules
@@ -77,7 +77,7 @@ When making significant architectural choices, add a new ADR following this temp
 ### ✅ Packages We Use
 
 - `laravel/framework` - Web framework
-- `laravel/sanctum` - SPA mode authentication (session-based)
+- `laravel/sanctum` - API token (Bearer) authentication; frontend uses thin BFF with httpOnly cookie
 - `spatie/laravel-permission` - Roles and permissions (RBAC)
 - `saeedvir/supabase` - Supabase client for database and storage
 - `spatie/laravel-activitylog` - Audit trails
@@ -125,7 +125,7 @@ public function clockIn(Request $request): JsonResponse
     return response()->json($result);
 }
 
-// ❌ Wrong: Using X-User-ID header or BFF pattern
+// ❌ Wrong: Using X-User-ID header or trusted BFF (Laravel must not trust a header; it must validate Bearer token)
 $userId = $request->header('X-User-ID'); // OLD - Don't use
 ```
 
@@ -133,7 +133,7 @@ $userId = $request->header('X-User-ID'); // OLD - Don't use
 
 - Always test module independence (can module boot alone?)
 - Test business rules without framework dependencies
-- Test Sanctum authentication (session validation)
+- Test Sanctum authentication (Bearer token validation)
 - Test Laravel Policies (authorization checks)
 - Test Spatie roles and permissions
 

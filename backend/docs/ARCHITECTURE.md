@@ -102,7 +102,7 @@ Both layers work together: Policy authorizes the action, Domain Rules validate t
 
 ### Note
 
-This ADR is superseded by ADR-004. JWT token generation is no longer used. Laravel now uses Sanctum SPA mode with session-based authentication.
+This ADR is superseded by ADR-004. JWT token generation is no longer used. Laravel now uses Sanctum API tokens (Bearer); the frontend uses a thin BFF (Next.js Route Handlers) with an httpOnly cookie.
 
 ---
 
@@ -130,7 +130,7 @@ The system needs:
 ### Decision
 
 Pivot from **Supabase-First** to **Laravel-First** architecture:
-- **Laravel Sanctum** (SPA mode) for authentication
+- **Laravel Sanctum** (API tokens, Bearer) for authentication; token is stored in an httpOnly cookie; the frontend uses a **thin BFF** (Next.js App Router Route Handlers) that forwards requests to Laravel with `Authorization: Bearer <token>`
 - **Spatie Laravel Permission** for RBAC (roles and permissions)
 - **Laravel Policies** for authorization checks
 - **Domain Rules** (existing) for business validation
@@ -144,30 +144,30 @@ Pivot from **Supabase-First** to **Laravel-First** architecture:
 2. **Better Developer Experience**: Policies are easier to write, test, and debug than RLS policies
 3. **Flexibility**: Easy to implement complex authorization logic (department-based, time-based, etc.)
 4. **Separation of Concerns**: Clear distinction between authorization (Policies) and business validation (Domain Rules)
-5. **Simpler Architecture**: No BFF middleware, no JWT generation, no RLS policies to maintain
+5. **Simpler Architecture**: No trusted BFF (X-User-ID), no JWT generation, no RLS policies; thin BFF only forwards requests with Bearer token
 6. **Better Testing**: Policies can be unit tested without database setup
 
 #### Trade-offs
 
 1. **No Database-Level Security**: RLS provided defense-in-depth; now Laravel is the only authorization layer
-2. **Session Management**: Requires session storage (database or Redis)
-3. **CSRF Protection**: SPA mode requires CSRF cookie handling
+2. **Token Storage**: Token lives in httpOnly cookie (set by Next.js); no session/CSRF needed for API calls
+3. **Thin BFF**: Next.js Route Handlers must proxy API requests and add Bearer token from cookie
 
 ### Consequences
 
 #### New Components
 
-- ✅ **Laravel Sanctum** - SPA mode for session-based authentication
+- ✅ **Laravel Sanctum** - API tokens (Bearer); validated by Laravel on every request
+- ✅ **Thin BFF** - Next.js App Router Route Handlers (`route.ts`) forward requests to Laravel with `Authorization: Bearer <token>` (token read from httpOnly cookie; browser never sees token)
 - ✅ **Spatie Laravel Permission** - Roles and permissions management
 - ✅ **Laravel Policies** - Authorization checks ("can user X do Y?")
 - ✅ **Domain Rules** (retained) - Business validation ("is user within geofence?")
 
 #### Removed Components
 
-- ❌ **TrustedBffMiddleware** - No longer needed with Sanctum SPA
-- ❌ **Supabase JWT generation** - Replaced by Sanctum sessions
+- ❌ **Trusted BFF** (X-User-ID header) - Replaced by thin BFF; Laravel always validates Bearer token itself
+- ❌ **Supabase JWT generation** - Replaced by Sanctum API tokens
 - ❌ **Supabase RLS policies** - Replaced by Laravel Policies
-- ❌ **BFF pattern** - Next.js calls Laravel directly with session cookies
 
 #### Authentication Flow
 
@@ -179,13 +179,14 @@ Pivot from **Supabase-First** to **Laravel-First** architecture:
 4. Supabase RLS filters data
 ```
 
-**After (Laravel-First):**
+**After (Laravel-First, thin BFF):**
 ```
-1. Lark OAuth → Laravel validates → Laravel creates session (Auth::login)
-2. Next.js calls Laravel with session cookie
-3. Sanctum validates session → Laravel Policy checks authorization
-4. Laravel executes business logic → Domain Rules validate conditions
-5. Data written to Supabase (plain PostgreSQL, no RLS)
+1. Lark OAuth → Laravel validates → Laravel issues Sanctum API token (e.g. in JSON or redirect query)
+2. Next.js sets httpOnly cookie with token (and optionally redirects); browser never receives raw token
+3. Browser → Next.js (sends cookie) → Next.js thin BFF (route.ts) → Laravel with Authorization: Bearer <token>
+4. Sanctum validates Bearer token → Laravel Policy checks authorization
+5. Laravel executes business logic → Domain Rules validate conditions
+6. Data written to Supabase (plain PostgreSQL, no RLS)
 ```
 
 #### Code Pattern
@@ -210,7 +211,7 @@ $validation = $this->attendanceRules->canClockIn($user->id, $location);
 
 | Responsibility | System | Implementation |
 |----------------|--------|----------------|
-| **Authentication** | Laravel Sanctum | Session-based (SPA mode) |
+| **Authentication** | Laravel Sanctum | API tokens (Bearer); token in httpOnly cookie; Next.js thin BFF adds `Authorization: Bearer` |
 | **Authorization (RBAC)** | Laravel + Spatie | Roles and permissions |
 | **Authorization (Policies)** | Laravel Policies | "Can user X do Y?" |
 | **Business Validation** | Laravel Domain Rules | "Under what conditions?" |
@@ -221,7 +222,7 @@ $validation = $this->attendanceRules->canClockIn($user->id, $location);
 
 1. **Keep Supabase-First**: Rejected due to complexity and maintenance burden
 2. **Hybrid Approach**: Rejected - would create confusion and duplicate logic
-3. **Token-Based Sanctum**: Rejected - SPA mode is simpler for Next.js integration
+3. **SPA mode (session + CSRF)**: Rejected for API - token in httpOnly cookie with thin BFF gives better XSS protection and avoids CSRF for API calls
 
 ---
 
@@ -307,7 +308,7 @@ Modules/
 ### Core Principle: Laravel Owns Authentication & Authorization
 
 This system follows a **Laravel-first architecture** where:
-- **Laravel Sanctum** handles authentication (SPA mode with session cookies)
+- **Laravel Sanctum** handles authentication (API tokens, Bearer); the browser never sends the token—the Next.js thin BFF reads it from an httpOnly cookie and sends `Authorization: Bearer <token>` to Laravel
 - **Laravel Policies** + **Spatie Permission** handle authorization (RBAC)
 - **Domain Rules** handle business validation (geofence, leave balance, etc.)
 - **Supabase** provides PostgreSQL database and file storage only (no RLS, no JWT)
@@ -318,10 +319,11 @@ This system follows a **Laravel-first architecture** where:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │   LARAVEL (Single Source of Truth for Auth & Authorization)     │
-│   ├── Sanctum SPA = Session-based authentication                 │
-│   ├── Spatie Permission = Roles & Permissions (RBAC)           │
+│   ├── Sanctum = API tokens (Bearer), validated by Laravel       │
+│   ├── Token in httpOnly cookie; thin BFF adds Authorization      │
+│   ├── Spatie Permission = Roles & Permissions (RBAC)             │
 │   ├── Laravel Policies = "Can user X do Y?"                     │
-│   └── Domain Rules = "Under what conditions is X allowed?"      │
+│   └── Domain Rules = "Under what conditions is X allowed?"       │
 │                                                                  │
 │   SUPABASE (Data Storage Only)                                  │
 │   ├── PostgreSQL = Plain database (no RLS)                      │
@@ -340,7 +342,7 @@ This system follows a **Laravel-first architecture** where:
 
 The following Laravel components **ARE used** in this architecture:
 
-- ✅ **Laravel Sanctum** - SPA mode for session-based authentication
+- ✅ **Laravel Sanctum** - API tokens (Bearer); token in httpOnly cookie; Next.js thin BFF forwards with `Authorization: Bearer`
 - ✅ **Spatie Laravel Permission** - Roles and permissions management (RBAC)
 - ✅ **Laravel Authorization Policies** - Fine-grained authorization checks
 - ✅ **Domain Rules** - Business rule validation (geofence, leave balance, etc.)
@@ -359,7 +361,7 @@ The following components **ARE used** for business logic:
 
 | Responsibility | System | Implementation |
 |----------------|--------|----------------|
-| **Authentication** | Laravel Sanctum | Session-based (SPA mode) |
+| **Authentication** | Laravel Sanctum | API tokens (Bearer); token in httpOnly cookie; Next.js thin BFF adds `Authorization: Bearer` |
 | **Authorization (RBAC)** | Laravel + Spatie | Roles and permissions |
 | **Authorization (Policies)** | Laravel Policies | "Can user X do Y?" |
 | **Business Validation** | Laravel Domain Rules | "Under what conditions?" |
@@ -378,23 +380,20 @@ Request Flow (Clock-In Example):
 ─────────────────────────────────────────────────────────────────
 [Initial Login]
 1. User clicks "Login with Lark" in Next.js
-2. Next.js calls Laravel: GET /sanctum/csrf-cookie
-3. Laravel sets CSRF cookie
-4. Next.js calls Laravel: POST /auth/lark/callback (OAuth code)
-5. Laravel validates Lark OAuth
-6. Laravel finds/creates user in database
-7. Laravel calls Auth::login($user) (creates session)
-8. Laravel returns 200 OK + session cookie
+2. Next.js (or browser redirect) hits Laravel: POST /auth/lark/callback (OAuth code)
+3. Laravel validates Lark OAuth, finds/creates user, issues Sanctum API token (e.g. in JSON or redirect query)
+4. Next.js sets httpOnly cookie with token; browser never receives raw token (or redirect replaces URL)
+5. User is considered logged in; subsequent API calls go via Next.js thin BFF
 
 [Subsequent Requests]
-9. Next.js calls Laravel: POST /api/attendance/clock-in
-   - Cookie: session cookie (automatically sent)
-10. Sanctum middleware validates session
-11. Laravel Policy checks: $this->authorize('create', Attendance::class)
-12. Domain Rules validate: $this->attendanceRules->canClockIn($user->id, $location)
-13. Laravel executes business logic
-14. Laravel writes to Supabase DB (plain PostgreSQL query)
-15. Laravel returns JSON response
+6. Browser → Next.js: POST /api/proxy/attendance/clock-in (Cookie: httpOnly auth cookie; no Authorization header from browser)
+7. Next.js thin BFF (route.ts) reads token from cookie, calls Laravel: POST /api/attendance/clock-in with Authorization: Bearer <token>
+8. Sanctum validates Bearer token
+9. Laravel Policy checks: $this->authorize('create', Attendance::class)
+10. Domain Rules validate: $this->attendanceRules->canClockIn($user->id, $location)
+11. Laravel executes business logic
+12. Laravel writes to Supabase DB (plain PostgreSQL query)
+13. Laravel returns JSON response; Next.js forwards response to browser
 ```
 
 ### Authorization vs Business Validation
