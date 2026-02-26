@@ -177,7 +177,7 @@ Authorization in this system uses Laravel Policies (for fine-grained checks) and
    - Checks relationships (e.g., "Is user a manager of this employee?")
    - Example: `AttendancePolicy::create($user)` checks if user has `attendance.create` permission
 
-2. **Domain Rules** (`app/Modules/*/Domain/Rules/`) - Handle business validation: "Under what conditions is X allowed?"
+2. **Domain Rules** (`app/Modules/*/Rules/`) - Handle business validation: "Under what conditions is X allowed?"
    - Checks business conditions (geofence, leave balance, etc.)
    - Example: `AttendanceRules::isWithinGeofence($lat, $lng)` checks if location is valid
 
@@ -342,8 +342,8 @@ This is vendor lock-in.
 ```
 Our architecture:
 
-├─ Domain/
-│  ├─ LeaveRules.php          ← Pure business logic (vendor-agnostic)
+├─ Services/
+│  ├─ LeaveService.php        ← Pure business logic (vendor-agnostic)
 │  └─ AttendanceService.php   ← Pure business logic (vendor-agnostic)
 │
 ├─ Adapters/
@@ -443,8 +443,7 @@ Domain layer never changes.
 └─────┬──────────────────────────────────────────────────┬─────────────┘
       │                                                  │
       │ HTTPS REST                                       │ WebSocket
-      │ X-User-ID: 123 (from Supabase JWT)               │ (Realtime)
-      │ X-Internal-Key: [shared secret]                  │
+      │ Cookie: session cookie (Sanctum SPA)             │ (Realtime)
       │                                                  │
       ▼                                                  ▼
 ┌───────────────────────────────────────────────────────────────────────┐
@@ -498,21 +497,19 @@ Domain layer never changes.
 │  │              (Business Logic - Vendor Agnostic)                   │ │
 │  │                                                                   │ │
 │  │  Attendance/                Leave/                 Claims/        │ │
-│  │  ├─ Domain/                 ├─ Domain/             ├─ Domain/    │ │
-│  │  │  ├─ Rules.php            │  ├─ Rules.php        │  ├─ Rules   │ │
-│  │  │  ├─ Service.php          │  ├─ Service.php      │  └─ Service │ │
-│  │  │  └─ Events/              │  └─ Events/          │             │ │
-│  │  ├─ Application/            ├─ Application/        ├─ App/       │ │
-│  │  │  └─ Handlers/            │  └─ Handlers/        │  └─ OCR/    │ │
-│  │  └─ Infrastructure/         └─ Infrastructure/     └─ Infra/     │ │
-│  │     └─ SupabaseRepo.php        └─ SupabaseRepo       └─ Repo    │ │
+│  │  ├─ Services/                ├─ Services/           ├─ Services/  │ │
+│  │  ├─ Rules/                  ├─ Rules/              ├─ Rules/     │ │
+│  │  ├─ Models/                 ├─ Models/             ├─ Models/    │ │
+│  │  ├─ Controllers/             ├─ Controllers/        ├─ Controllers│ │
+│  │  ├─ Events/                  ├─ Events/            ├─ Events/    │ │
+│  │  └─ Adapters/                └─ Adapters/          └─ Adapters/  │ │
 │  └──────────────────────────────────────────────────────────────────┘ │
 │                                                                        │
 │  ┌──────────────────────────────────────────────────────────────────┐ │
 │  │                 CROSS-CUTTING CONCERNS                            │ │
 │  │                                                                   │ │
-│  │  • Supabase JWT → User identity (validated by Next.js BFF)      │ │
-│  │  • Supabase RLS → Row-level access control                       │ │
+│  │  • Laravel Sanctum → Session-based authentication (SPA mode)     │ │
+│  │  • Laravel Policies → Authorization checks                      │ │
 │  │  • Spatie Activity Log → Audit trail (automatic)                 │ │
 │  │  • Laravel Events → Domain event system                          │ │
 │  │  • saeedvir/supabase → DB + Realtime + Storage access            │ │
@@ -633,12 +630,12 @@ STEP 3: Laravel Validates (AUTHORITATIVE)
    ┌───────────────────────────────────────────────────────┐
    │  AttendanceController                                 │
    │                                                       │
-   │  1. TrustedBffMiddleware validates                    │
-   │     ✅ X-Internal-Key matches shared secret           │
-   │     ✅ X-User-ID extracted from Supabase JWT         │
+   │  1. Sanctum validates session cookie                  │
+   │     ✅ Session cookie authenticated                   │
+   │     ✅ User extracted from session                    │
    │                                                       │
-   │  2. Dispatch to Handler                               │
-   │     $handler->handle(new ClockInCommand(...))         │
+   │  2. Policy checks authorization                       │
+   │     $this->authorize('create', Attendance::class)     │
    └───────────────────────┬───────────────────────────────┘
                            │
                            ▼
@@ -778,10 +775,9 @@ TOTAL TIME: ~400-600ms
 
 Security Layers Applied:
 ✅ Lark native GPS (hard to spoof)
-✅ Supabase JWT authentication (validated by Next.js BFF)
-✅ TrustedBffMiddleware (validates internal API calls)
+✅ Laravel Sanctum session authentication (SPA mode)
+✅ Laravel Policies (authorization checks)
 ✅ Domain rules validation (geofence, duplicate check)
-✅ Supabase RLS (row-level access control)
 ✅ Audit log (automatic via Spatie Activity Log)
 ```
 
@@ -1236,8 +1232,10 @@ CREATE INDEX idx_attendance_user_date ON attendance(user_id, clocked_at);
 
 **Day 3-5: Laravel Implementation**
 ```php
-// app/Modules/Attendance/Domain/Rules/AttendanceRules.php
+// app/Modules/Attendance/Rules/AttendanceRules.php
 // Note: This is a business rule validator, NOT a Laravel authorization policy
+namespace App\Modules\Attendance\Rules;
+
 class AttendanceRules
 {
     private const OFFICE_LAT = 3.1390;  // Update with your office
@@ -1281,10 +1279,20 @@ class AttendanceRules
     }
 }
 
-// app/Http/Controllers/Api/AttendanceController.php
+// app/Modules/Attendance/Controllers/AttendanceController.php
+namespace App\Modules\Attendance\Controllers;
+
+use App\Modules\Attendance\Services\AttendanceService;
+use App\Modules\Attendance\Rules\AttendanceRules;
+
 class AttendanceController extends Controller
 {
-    public function clockIn(Request $request, ClockInHandler $handler)
+    public function __construct(
+        private AttendanceService $attendanceService,
+        private AttendanceRules $attendanceRules
+    ) {}
+    
+    public function clockIn(Request $request): JsonResponse
     {
         // 1. Authorization check (Policy)
         $this->authorize('create', Attendance::class);
@@ -1298,17 +1306,16 @@ class AttendanceController extends Controller
             'wifi_ssid' => 'nullable|string',
         ]);
         
-        $command = new ClockInCommand(
-            userId: $user->id, // From authenticated session
-            latitude: $validated['latitude'],
-            longitude: $validated['longitude'],
-            wifiSsid: $validated['wifi_ssid'] ?? null,
-            clockedAt: now()
-        );
+        // 3. Business validation (Domain Rules)
+        $validation = $this->attendanceRules->canClockIn($user->id, $validated);
+        if ($validation->failed()) {
+            throw new BusinessRuleViolationException($validation->errors());
+        }
         
-        $handler->handle($command);
+        // 4. Execute business logic
+        $attendance = $this->attendanceService->clockIn($user->id, $validated);
         
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'attendance' => $attendance]);
     }
 }
 ```

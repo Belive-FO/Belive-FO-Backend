@@ -102,7 +102,7 @@ Both layers work together: Policy authorizes the action, Domain Rules validate t
 
 ### Note
 
-This ADR is superseded by ADR-004. JWT token generation is no longer used. Laravel now uses Sanctum SPA mode with session-based authentication.
+This ADR is superseded by ADR-004. JWT token generation is no longer used. Laravel now uses Sanctum API tokens (Bearer); the frontend uses a thin BFF (Next.js Route Handlers) with an httpOnly cookie.
 
 ---
 
@@ -130,7 +130,7 @@ The system needs:
 ### Decision
 
 Pivot from **Supabase-First** to **Laravel-First** architecture:
-- **Laravel Sanctum** (SPA mode) for authentication
+- **Laravel Sanctum** (API tokens, Bearer) for authentication; token is stored in an httpOnly cookie; the frontend uses a **thin BFF** (Next.js App Router Route Handlers) that forwards requests to Laravel with `Authorization: Bearer <token>`
 - **Spatie Laravel Permission** for RBAC (roles and permissions)
 - **Laravel Policies** for authorization checks
 - **Domain Rules** (existing) for business validation
@@ -144,30 +144,30 @@ Pivot from **Supabase-First** to **Laravel-First** architecture:
 2. **Better Developer Experience**: Policies are easier to write, test, and debug than RLS policies
 3. **Flexibility**: Easy to implement complex authorization logic (department-based, time-based, etc.)
 4. **Separation of Concerns**: Clear distinction between authorization (Policies) and business validation (Domain Rules)
-5. **Simpler Architecture**: No BFF middleware, no JWT generation, no RLS policies to maintain
+5. **Simpler Architecture**: No trusted BFF (X-User-ID), no JWT generation, no RLS policies; thin BFF only forwards requests with Bearer token
 6. **Better Testing**: Policies can be unit tested without database setup
 
 #### Trade-offs
 
 1. **No Database-Level Security**: RLS provided defense-in-depth; now Laravel is the only authorization layer
-2. **Session Management**: Requires session storage (database or Redis)
-3. **CSRF Protection**: SPA mode requires CSRF cookie handling
+2. **Token Storage**: Token lives in httpOnly cookie (set by Next.js); no session/CSRF needed for API calls
+3. **Thin BFF**: Next.js Route Handlers must proxy API requests and add Bearer token from cookie
 
 ### Consequences
 
 #### New Components
 
-- ✅ **Laravel Sanctum** - SPA mode for session-based authentication
+- ✅ **Laravel Sanctum** - API tokens (Bearer); validated by Laravel on every request
+- ✅ **Thin BFF** - Next.js App Router Route Handlers (`route.ts`) forward requests to Laravel with `Authorization: Bearer <token>` (token read from httpOnly cookie; browser never sees token)
 - ✅ **Spatie Laravel Permission** - Roles and permissions management
 - ✅ **Laravel Policies** - Authorization checks ("can user X do Y?")
 - ✅ **Domain Rules** (retained) - Business validation ("is user within geofence?")
 
 #### Removed Components
 
-- ❌ **TrustedBffMiddleware** - No longer needed with Sanctum SPA
-- ❌ **Supabase JWT generation** - Replaced by Sanctum sessions
+- ❌ **Trusted BFF** (X-User-ID header) - Replaced by thin BFF; Laravel always validates Bearer token itself
+- ❌ **Supabase JWT generation** - Replaced by Sanctum API tokens
 - ❌ **Supabase RLS policies** - Replaced by Laravel Policies
-- ❌ **BFF pattern** - Next.js calls Laravel directly with session cookies
 
 #### Authentication Flow
 
@@ -179,13 +179,14 @@ Pivot from **Supabase-First** to **Laravel-First** architecture:
 4. Supabase RLS filters data
 ```
 
-**After (Laravel-First):**
+**After (Laravel-First, thin BFF):**
 ```
-1. Lark OAuth → Laravel validates → Laravel creates session (Auth::login)
-2. Next.js calls Laravel with session cookie
-3. Sanctum validates session → Laravel Policy checks authorization
-4. Laravel executes business logic → Domain Rules validate conditions
-5. Data written to Supabase (plain PostgreSQL, no RLS)
+1. Lark OAuth → Laravel validates → Laravel issues Sanctum API token (e.g. in JSON or redirect query)
+2. Next.js sets httpOnly cookie with token (and optionally redirects); browser never receives raw token
+3. Browser → Next.js (sends cookie) → Next.js thin BFF (route.ts) → Laravel with Authorization: Bearer <token>
+4. Sanctum validates Bearer token → Laravel Policy checks authorization
+5. Laravel executes business logic → Domain Rules validate conditions
+6. Data written to Supabase (plain PostgreSQL, no RLS)
 ```
 
 #### Code Pattern
@@ -210,7 +211,7 @@ $validation = $this->attendanceRules->canClockIn($user->id, $location);
 
 | Responsibility | System | Implementation |
 |----------------|--------|----------------|
-| **Authentication** | Laravel Sanctum | Session-based (SPA mode) |
+| **Authentication** | Laravel Sanctum | API tokens (Bearer); token in httpOnly cookie; Next.js thin BFF adds `Authorization: Bearer` |
 | **Authorization (RBAC)** | Laravel + Spatie | Roles and permissions |
 | **Authorization (Policies)** | Laravel Policies | "Can user X do Y?" |
 | **Business Validation** | Laravel Domain Rules | "Under what conditions?" |
@@ -221,7 +222,82 @@ $validation = $this->attendanceRules->canClockIn($user->id, $location);
 
 1. **Keep Supabase-First**: Rejected due to complexity and maintenance burden
 2. **Hybrid Approach**: Rejected - would create confusion and duplicate logic
-3. **Token-Based Sanctum**: Rejected - SPA mode is simpler for Next.js integration
+3. **SPA mode (session + CSRF)**: Rejected for API - token in httpOnly cookie with thin BFF gives better XSS protection and avoids CSRF for API calls
+
+---
+
+## ADR-005: Simplified Modular Structure
+
+**Status:** Accepted  
+**Date:** 2026-02-XX  
+**Decision Makers:** Architecture Team
+
+### Context
+
+The initial module structure followed a deep DDD (Domain-Driven Design) layering pattern:
+- `Domain/Models/`, `Domain/Services/`, `Domain/Rules/`, `Domain/Events/`
+- `Application/UseCases/`, `Application/DTOs/`
+- `Infrastructure/Persistence/`, `Infrastructure/Adapters/`
+- `Presentation/Http/Controllers/`
+
+This resulted in **47 directories but only 14 PHP files**, with most directories empty. The deep nesting added complexity without providing value at this stage of the project.
+
+### Decision
+
+Flatten the module structure to a simplified modular layout:
+- Remove `Domain/`, `Application/`, `Infrastructure/`, `Presentation/` nesting
+- Use flat directories: `Models/`, `Services/`, `Rules/`, `Controllers/`, `Events/`, `Adapters/`
+- Keep module boundaries and communication patterns (Contracts, Events) unchanged
+
+### Rationale
+
+1. **Reduced Complexity**: Fewer directory levels make navigation easier
+2. **YAGNI Principle**: Deep DDD layering is premature for current scale
+3. **Laravel Conventions**: Aligns better with Laravel's standard structure
+4. **Maintainability**: Easier to find files and understand module organization
+5. **Module Boundaries Preserved**: Still maintains modular monolith principles
+
+### Consequences
+
+#### New Structure
+
+```
+Modules/
+├── Attendance/
+│   ├── AttendanceServiceProvider.php
+│   ├── Services/
+│   │   └── AttendanceService.php
+│   ├── Models/
+│   ├── Rules/
+│   ├── Controllers/
+│   ├── Events/
+│   └── Adapters/
+├── Leave/
+│   └── [Similar structure]
+└── Claims/
+    └── [Similar structure]
+```
+
+#### Namespace Changes
+
+- `App\Modules\Attendance\Domain\Services\AttendanceService` → `App\Modules\Attendance\Services\AttendanceService`
+- `App\Modules\Attendance\Domain\Rules\AttendanceRules` → `App\Modules\Attendance\Rules\AttendanceRules`
+- `App\Modules\Attendance\Presentation\Http\Controllers\AttendanceController` → `App\Modules\Attendance\Controllers\AttendanceController`
+
+#### What Remains Unchanged
+
+- ✅ Module boundaries and independence
+- ✅ Communication via `Shared/Contracts` interfaces
+- ✅ Domain events for cross-module coordination
+- ✅ Authorization (Policies) and business validation (Rules) separation
+- ✅ Vendor independence via Adapters pattern
+
+#### Removed Patterns
+
+- ❌ Command/Handler pattern (controllers call Services directly)
+- ❌ DTOs folder (use Laravel Form Requests and API Resources)
+- ❌ Persistence folder (Eloquent models are the repository)
+- ❌ Deep nesting (Domain/Application/Infrastructure/Presentation)
 
 ---
 
@@ -232,7 +308,7 @@ $validation = $this->attendanceRules->canClockIn($user->id, $location);
 ### Core Principle: Laravel Owns Authentication & Authorization
 
 This system follows a **Laravel-first architecture** where:
-- **Laravel Sanctum** handles authentication (SPA mode with session cookies)
+- **Laravel Sanctum** handles authentication (API tokens, Bearer); the browser never sends the token—the Next.js thin BFF reads it from an httpOnly cookie and sends `Authorization: Bearer <token>` to Laravel
 - **Laravel Policies** + **Spatie Permission** handle authorization (RBAC)
 - **Domain Rules** handle business validation (geofence, leave balance, etc.)
 - **Supabase** provides PostgreSQL database and file storage only (no RLS, no JWT)
@@ -243,10 +319,11 @@ This system follows a **Laravel-first architecture** where:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │   LARAVEL (Single Source of Truth for Auth & Authorization)     │
-│   ├── Sanctum SPA = Session-based authentication                 │
-│   ├── Spatie Permission = Roles & Permissions (RBAC)           │
+│   ├── Sanctum = API tokens (Bearer), validated by Laravel       │
+│   ├── Token in httpOnly cookie; thin BFF adds Authorization      │
+│   ├── Spatie Permission = Roles & Permissions (RBAC)             │
 │   ├── Laravel Policies = "Can user X do Y?"                     │
-│   └── Domain Rules = "Under what conditions is X allowed?"      │
+│   └── Domain Rules = "Under what conditions is X allowed?"       │
 │                                                                  │
 │   SUPABASE (Data Storage Only)                                  │
 │   ├── PostgreSQL = Plain database (no RLS)                      │
@@ -265,7 +342,7 @@ This system follows a **Laravel-first architecture** where:
 
 The following Laravel components **ARE used** in this architecture:
 
-- ✅ **Laravel Sanctum** - SPA mode for session-based authentication
+- ✅ **Laravel Sanctum** - API tokens (Bearer); token in httpOnly cookie; Next.js thin BFF forwards with `Authorization: Bearer`
 - ✅ **Spatie Laravel Permission** - Roles and permissions management (RBAC)
 - ✅ **Laravel Authorization Policies** - Fine-grained authorization checks
 - ✅ **Domain Rules** - Business rule validation (geofence, leave balance, etc.)
@@ -284,7 +361,7 @@ The following components **ARE used** for business logic:
 
 | Responsibility | System | Implementation |
 |----------------|--------|----------------|
-| **Authentication** | Laravel Sanctum | Session-based (SPA mode) |
+| **Authentication** | Laravel Sanctum | API tokens (Bearer); token in httpOnly cookie; Next.js thin BFF adds `Authorization: Bearer` |
 | **Authorization (RBAC)** | Laravel + Spatie | Roles and permissions |
 | **Authorization (Policies)** | Laravel Policies | "Can user X do Y?" |
 | **Business Validation** | Laravel Domain Rules | "Under what conditions?" |
@@ -303,23 +380,20 @@ Request Flow (Clock-In Example):
 ─────────────────────────────────────────────────────────────────
 [Initial Login]
 1. User clicks "Login with Lark" in Next.js
-2. Next.js calls Laravel: GET /sanctum/csrf-cookie
-3. Laravel sets CSRF cookie
-4. Next.js calls Laravel: POST /auth/lark/callback (OAuth code)
-5. Laravel validates Lark OAuth
-6. Laravel finds/creates user in database
-7. Laravel calls Auth::login($user) (creates session)
-8. Laravel returns 200 OK + session cookie
+2. Next.js (or browser redirect) hits Laravel: POST /auth/lark/callback (OAuth code)
+3. Laravel validates Lark OAuth, finds/creates user, issues Sanctum API token (e.g. in JSON or redirect query)
+4. Next.js sets httpOnly cookie with token; browser never receives raw token (or redirect replaces URL)
+5. User is considered logged in; subsequent API calls go via Next.js thin BFF
 
 [Subsequent Requests]
-9. Next.js calls Laravel: POST /api/attendance/clock-in
-   - Cookie: session cookie (automatically sent)
-10. Sanctum middleware validates session
-11. Laravel Policy checks: $this->authorize('create', Attendance::class)
-12. Domain Rules validate: $this->attendanceRules->canClockIn($user->id, $location)
-13. Laravel executes business logic
-14. Laravel writes to Supabase DB (plain PostgreSQL query)
-15. Laravel returns JSON response
+6. Browser → Next.js: POST /api/proxy/attendance/clock-in (Cookie: httpOnly auth cookie; no Authorization header from browser)
+7. Next.js thin BFF (route.ts) reads token from cookie, calls Laravel: POST /api/attendance/clock-in with Authorization: Bearer <token>
+8. Sanctum validates Bearer token
+9. Laravel Policy checks: $this->authorize('create', Attendance::class)
+10. Domain Rules validate: $this->attendanceRules->canClockIn($user->id, $location)
+11. Laravel executes business logic
+12. Laravel writes to Supabase DB (plain PostgreSQL query)
+13. Laravel returns JSON response; Next.js forwards response to browser
 ```
 
 ### Authorization vs Business Validation
@@ -331,7 +405,7 @@ Request Flow (Clock-In Example):
    - Checks relationships (e.g., "Is user a manager of this employee?")
    - Example: `AttendancePolicy::create($user)` checks if user has `attendance.create` permission
 
-2. **Domain Rules** (`app/Modules/*/Domain/Rules/`) - Handle **business validation**: "Under what conditions is X allowed?"
+2. **Domain Rules** (`app/Modules/*/Rules/`) - Handle **business validation**: "Under what conditions is X allowed?"
    - Checks business conditions (geofence, leave balance, etc.)
    - Example: `AttendanceRules::isWithinGeofence($lat, $lng)` checks if location is valid
 
@@ -418,40 +492,20 @@ belive-api/
 │   │   │       └── Money.php
 │   │   │
 │   │   ├── Attendance/
-│   │   │   ├── Domain/
-│   │   │   │   ├── Models/
-│   │   │   │   │   └── Attendance.php        # Attendance Eloquent model
-│   │   │   │   ├── Rules/                    # Business rule validators
-│   │   │   │   │   └── AttendanceRules.php   # NOT authorization policies
-│   │   │   │   ├── Services/
-│   │   │   │   │   └── AttendanceService.php
-│   │   │   │   └── Events/
-│   │   │   │       ├── AttendanceClockedIn.php
-│   │   │   │       └── AttendanceClockedOut.php
-│   │   │   │
-│   │   │   ├── Application/
-│   │   │   │   ├── UseCases/
-│   │   │   │   │   ├── ClockIn/
-│   │   │   │   │   │   ├── ClockInCommand.php
-│   │   │   │   │   │   └── ClockInHandler.php
-│   │   │   │   │   └── ClockOut/
-│   │   │   │   │       ├── ClockOutCommand.php
-│   │   │   │   │       └── ClockOutHandler.php
-│   │   │   │   └── DTOs/
-│   │   │   │       └── AttendanceDTO.php
-│   │   │   │
-│   │   │   ├── Infrastructure/
-│   │   │   │   ├── Persistence/
-│   │   │   │   │   └── AttendanceRepository.php
-│   │   │   │   └── Adapters/
-│   │   │   │       └── SupabaseAdapter.php
-│   │   │   │
-│   │   │   ├── Presentation/
-│   │   │   │   └── Http/
-│   │   │   │       └── Controllers/
-│   │   │   │           └── AttendanceController.php
-│   │   │   │
-│   │   │   └── AttendanceServiceProvider.php  # Module registration
+│   │   │   ├── AttendanceServiceProvider.php  # Module registration
+│   │   │   ├── Services/
+│   │   │   │   └── AttendanceService.php      # Business logic
+│   │   │   ├── Models/
+│   │   │   │   └── Attendance.php             # Attendance Eloquent model
+│   │   │   ├── Rules/
+│   │   │   │   └── AttendanceRules.php        # Business rule validators (NOT authorization policies)
+│   │   │   ├── Controllers/
+│   │   │   │   └── AttendanceController.php   # HTTP controllers
+│   │   │   ├── Events/
+│   │   │   │   ├── AttendanceClockedIn.php
+│   │   │   │   └── AttendanceClockedOut.php
+│   │   │   └── Adapters/
+│   │   │       └── LarkAdapter.php            # External API integrations (when needed)
 │   │   │
 │   │   ├── Leave/
 │   │   │   └── [Similar structure]
@@ -480,9 +534,9 @@ belive-api/
 
 ```php
 // ❌ WRONG - Leave module directly accessing Attendance model
-namespace App\Modules\Leave\Application;
+namespace App\Modules\Leave;
 
-use App\Modules\Attendance\Domain\Models\Attendance;  // ❌ FORBIDDEN!
+use App\Modules\Attendance\Models\Attendance;  // ❌ FORBIDDEN!
 
 class LeaveService 
 {
@@ -506,7 +560,7 @@ class LeaveService
 
 ```php
 // ✅ CORRECT - Attendance publishes event
-namespace App\Modules\Attendance\Domain\Services;
+namespace App\Modules\Attendance\Services;
 
 use App\Modules\Shared\Events\AttendanceClockedIn;
 
@@ -528,7 +582,7 @@ class AttendanceService
 }
 
 // ✅ CORRECT - Leave listens to event
-namespace App\Modules\Leave\Infrastructure\Listeners;
+namespace App\Modules\Leave\Listeners;
 
 use App\Modules\Shared\Events\AttendanceClockedIn;
 
@@ -560,7 +614,7 @@ interface AttendanceServiceInterface
 }
 
 // Attendance implements it
-namespace App\Modules\Attendance\Domain\Services;
+namespace App\Modules\Attendance\Services;
 
 use App\Modules\Shared\Contracts\AttendanceServiceInterface;
 
@@ -582,29 +636,29 @@ class AttendanceService implements AttendanceServiceInterface
 }
 
 // Leave uses the interface (NOT the concrete class)
-namespace App\Modules\Leave\Application\UseCases\SubmitLeave;
+namespace App\Modules\Leave;
 
 use App\Modules\Shared\Contracts\AttendanceServiceInterface;
 
-class SubmitLeaveHandler 
+class LeaveService 
 {
     public function __construct(
         private AttendanceServiceInterface $attendanceService  // ✅ Depends on interface
     ) {}
     
-    public function handle(SubmitLeaveCommand $command) 
+    public function canTakeLeave(int $userId, DateRange $period): bool 
     {
         // ✅ Call through interface
         $attendanceCount = $this->attendanceService->getUserAttendanceCount(
-            $command->userId,
-            new DateRange(now()->startOfYear(), now())
+            $userId,
+            $period
         );
         
         if ($attendanceCount < 100) {
-            throw new InsufficientAttendanceException();
+            return false;
         }
         
-        // Proceed with leave creation...
+        return true;
     }
 }
 
@@ -740,8 +794,8 @@ app/Models/
 ```php
 // ✅ DO - Each module owns its models
 app/Modules/
-├── Attendance/Domain/Models/Attendance.php
-├── Leave/Domain/Models/Leave.php
+├── Attendance/Models/Attendance.php
+├── Leave/Models/Leave.php
 └── Shared/
     ├── Contracts/UserServiceInterface.php  # Interface only
     └── ValueObjects/UserId.php             # Value object (no DB)
@@ -755,7 +809,7 @@ app/Services/
 └── AttendanceService.php  ← Used by multiple modules
 
 // ✅ DO
-app/Modules/Attendance/Domain/Services/AttendanceService.php
+app/Modules/Attendance/Services/AttendanceService.php
 app/Modules/Shared/Contracts/AttendanceServiceInterface.php
 ```
 

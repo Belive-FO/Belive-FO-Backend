@@ -66,7 +66,7 @@ public function test_attendance_depends_on_leave_contract_only()
     $service = app(\App\Modules\Shared\Contracts\LeaveServiceInterface::class);
 
     $this->assertNotInstanceOf(
-        \App\Modules\Leave\Domain\Services\LeaveService::class,
+        \App\Modules\Leave\Services\LeaveService::class,
         $service
     );
 }

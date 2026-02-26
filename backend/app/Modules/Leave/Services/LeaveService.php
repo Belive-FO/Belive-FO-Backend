@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Leave\Domain\Services;
+namespace App\Modules\Leave\Services;
 
 use App\Modules\Shared\Contracts\LeaveServiceInterface;
 
@@ -18,5 +18,4 @@ class LeaveService implements LeaveServiceInterface
         return false;
     }
 }
-
 

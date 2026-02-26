@@ -4,7 +4,7 @@ namespace App\Modules\Leave;
 
 use Illuminate\Support\ServiceProvider;
 use App\Modules\Shared\Contracts\LeaveServiceInterface;
-use App\Modules\Leave\Domain\Services\LeaveService;
+use App\Modules\Leave\Services\LeaveService;
 
 class LeaveServiceProvider extends ServiceProvider
 {
@@ -20,13 +20,13 @@ class LeaveServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Load routes if they exist
-        if (file_exists(__DIR__ . '/Presentation/Http/routes.php')) {
-            $this->loadRoutesFrom(__DIR__ . '/Presentation/Http/routes.php');
+        if (file_exists(__DIR__ . '/Controllers/routes.php')) {
+            $this->loadRoutesFrom(__DIR__ . '/Controllers/routes.php');
         }
         
         // Load migrations if they exist
-        if (is_dir(__DIR__ . '/Infrastructure/Persistence/Migrations')) {
-            $this->loadMigrationsFrom(__DIR__ . '/Infrastructure/Persistence/Migrations');
+        if (is_dir(__DIR__ . '/Migrations')) {
+            $this->loadMigrationsFrom(__DIR__ . '/Migrations');
         }
     }
 }

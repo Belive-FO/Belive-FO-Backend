@@ -24,6 +24,9 @@ Desktop.ini
 *.log
 logs/
 
+# Personal planning (implementation plans, local notes)
+TODO.md
+
 # Environment files
 .env
 .env.local

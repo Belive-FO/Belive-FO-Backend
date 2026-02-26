@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Attendance\Domain\Services;
+namespace App\Modules\Attendance\Services;
 
 use App\Modules\Shared\Contracts\AttendanceServiceInterface;
 use App\Modules\Shared\ValueObjects\DateRange;
@@ -19,5 +19,4 @@ class AttendanceService implements AttendanceServiceInterface
         return false;
     }
 }
-
 
