@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Office extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'name',
+        'address',
+        'latitude',
+        'longitude',
+        'radius_meters',
+        'is_active',
+        'timezone',
+    ];
+
+    public function attendanceLogs()
+    {
+        return $this->hasMany(AttendanceLog::class);
+    }
+}
+

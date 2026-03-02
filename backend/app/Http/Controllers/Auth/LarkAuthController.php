@@ -112,7 +112,9 @@ class LarkAuthController extends Controller
 
             // 4. Create session + Bearer token
             Auth::login($user);
-            $request->session()->regenerate();
+            if ($request->hasSession()) {
+                $request->session()->regenerate();
+            }
 
             $user->last_login_at = now();
             $user->save();
@@ -181,7 +183,9 @@ class LarkAuthController extends Controller
         $authenticatedUser = $request->user();
         CheckAccountLocked::clearFailedAttempts($authenticatedUser->id);
 
-        $request->session()->regenerate();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
 
         $authenticatedUser->last_login_at = now();
         $authenticatedUser->save();

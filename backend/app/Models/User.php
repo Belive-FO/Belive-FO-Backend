@@ -27,6 +27,7 @@ class User extends Authenticatable
         'lark_open_id',
         'lark_union_id',
         'avatar_url',
+        'face_photo_url',
         'department_id',
         'last_login_at',
     ];
