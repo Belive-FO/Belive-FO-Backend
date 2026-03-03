@@ -21,19 +21,19 @@ class OfficeController extends Controller
 
         $offices = $query->orderBy('name')->get();
 
-        return response()->json(OfficeResource::collection($offices));
+        return response()->json(['data' => OfficeResource::collection($offices)]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'         => ['required', 'string', 'max:255'],
-            'address'      => ['nullable', 'string', 'max:255'],
-            'latitude'     => ['required', 'numeric', 'between:-90,90'],
-            'longitude'    => ['required', 'numeric', 'between:-180,180'],
-            'radiusMeters' => ['required', 'integer', 'min:1'],
-            'isActive'     => ['required', 'boolean'],
-            'timezone'     => ['nullable', 'string', 'max:255'],
+            'name'          => ['required', 'string', 'max:255'],
+            'address'       => ['nullable', 'string', 'max:500'],
+            'latitude'      => ['required', 'numeric', 'between:-90,90'],
+            'longitude'     => ['required', 'numeric', 'between:-180,180'],
+            'radius_meters' => ['required', 'integer', 'min:1'],
+            'is_active'     => ['required', 'boolean'],
+            'timezone'      => ['nullable', 'string', 'max:100'],
         ]);
 
         $office = Office::create([
@@ -41,26 +41,24 @@ class OfficeController extends Controller
             'address'       => $data['address'] ?? null,
             'latitude'      => $data['latitude'],
             'longitude'     => $data['longitude'],
-            'radius_meters' => $data['radiusMeters'],
-            'is_active'     => $data['isActive'],
+            'radius_meters' => $data['radius_meters'],
+            'is_active'     => $data['is_active'],
             'timezone'      => $data['timezone'] ?? null,
         ]);
 
-        return response()->json(new OfficeResource($office), 201);
+        return response()->json(['data' => new OfficeResource($office)], 201);
     }
 
-    public function update(int $id, Request $request): JsonResponse
+    public function update(Office $office, Request $request): JsonResponse
     {
-        $office = Office::findOrFail($id);
-
         $data = $request->validate([
-            'name'         => ['required', 'string', 'max:255'],
-            'address'      => ['nullable', 'string', 'max:255'],
-            'latitude'     => ['required', 'numeric', 'between:-90,90'],
-            'longitude'    => ['required', 'numeric', 'between:-180,180'],
-            'radiusMeters' => ['required', 'integer', 'min:1'],
-            'isActive'     => ['required', 'boolean'],
-            'timezone'     => ['nullable', 'string', 'max:255'],
+            'name'          => ['required', 'string', 'max:255'],
+            'address'       => ['nullable', 'string', 'max:500'],
+            'latitude'      => ['required', 'numeric', 'between:-90,90'],
+            'longitude'     => ['required', 'numeric', 'between:-180,180'],
+            'radius_meters' => ['required', 'integer', 'min:1'],
+            'is_active'     => ['required', 'boolean'],
+            'timezone'      => ['nullable', 'string', 'max:100'],
         ]);
 
         $office->update([
@@ -68,26 +66,29 @@ class OfficeController extends Controller
             'address'       => $data['address'] ?? null,
             'latitude'      => $data['latitude'],
             'longitude'     => $data['longitude'],
-            'radius_meters' => $data['radiusMeters'],
-            'is_active'     => $data['isActive'],
+            'radius_meters' => $data['radius_meters'],
+            'is_active'     => $data['is_active'],
             'timezone'      => $data['timezone'] ?? null,
         ]);
 
-        return response()->json(new OfficeResource($office));
+        return response()->json(['data' => new OfficeResource($office)]);
     }
 
-    public function toggleActive(int $id, Request $request): JsonResponse
+    public function toggleActive(Office $office, Request $request): JsonResponse
     {
-        $office = Office::findOrFail($id);
-
         $data = $request->validate([
-            'isActive' => ['required', 'boolean'],
+            'is_active' => ['required', 'boolean'],
         ]);
 
-        $office->is_active = $data['isActive'];
+        $office->is_active = $data['is_active'];
         $office->save();
 
-        return response()->json(new OfficeResource($office));
+        return response()->json([
+            'data' => [
+                'id'        => $office->id,
+                'is_active' => $office->is_active,
+            ],
+        ]);
     }
 }
 

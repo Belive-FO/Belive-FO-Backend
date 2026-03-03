@@ -122,8 +122,11 @@ class LarkAuthController extends Controller
 
             $token = $user->createToken('belive-fo-lark')->plainTextToken;
 
+            $userForResponse = $user->toArray();
+            $userForResponse['roles'] = $user->getRoleNames()->toArray();
+
             return $this->success([
-                'user'  => $user,
+                'user'  => $userForResponse,
                 'token' => $token,
             ], 'Login successful.');
         } catch (\Exception $e) {
@@ -193,8 +196,11 @@ class LarkAuthController extends Controller
 
         $token = $authenticatedUser->createToken('belive-fo')->plainTextToken;
 
+        $userForResponse = $authenticatedUser->toArray();
+        $userForResponse['roles'] = $authenticatedUser->getRoleNames()->toArray();
+
         return $this->success([
-            'user'  => $authenticatedUser,
+            'user'  => $userForResponse,
             'token' => $token,
         ], 'Login successful.');
     }
@@ -231,6 +237,10 @@ class LarkAuthController extends Controller
      */
     public function me(Request $request): JsonResponse
     {
-        return $this->success(['user' => $request->user()->load('roles')]);
+        $user = $request->user()->load('roles');
+        $userForResponse = $user->toArray();
+        $userForResponse['roles'] = $user->getRoleNames()->toArray();
+
+        return $this->success(['user' => $userForResponse]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Attendance;
 
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use App\Modules\Shared\Contracts\AttendanceServiceInterface;
 use App\Modules\Attendance\Services\AttendanceService;
@@ -16,12 +17,12 @@ class AttendanceServiceProvider extends ServiceProvider
             AttendanceService::class
         );
     }
-    
+
     public function boot(): void
     {
-        // Load routes if they exist
+        // Load routes under /api so they match frontend proxy (e.g. POST /api/offices)
         if (file_exists(__DIR__ . '/Controllers/routes.php')) {
-            $this->loadRoutesFrom(__DIR__ . '/Controllers/routes.php');
+            Route::prefix('api')->middleware('api')->group(__DIR__ . '/Controllers/routes.php');
         }
         
         // Load migrations if they exist

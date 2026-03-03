@@ -15,7 +15,7 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
-            $table->foreignId('office_id')
+            $table->foreignUuid('office_id')
                 ->nullable()
                 ->constrained('offices')
                 ->nullOnDelete();

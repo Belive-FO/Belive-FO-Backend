@@ -39,7 +39,7 @@ class AttendanceController extends Controller
 
         $data = $request->validate([
             'type'     => ['required', 'in:clock_in,clock_out'],
-            'officeId' => ['required', 'integer', 'exists:offices,id'],
+            'officeId' => ['required', 'string', 'exists:offices,id'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude'=> ['required', 'numeric', 'between:-180,180'],
             'photoUrl' => ['nullable', 'string'],

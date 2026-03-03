@@ -8,19 +8,21 @@ use App\Modules\Attendance\Controllers\OfficeController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Office CRUD — Superadmin only (spec: all 4 endpoints require superadmin)
+    Route::middleware('role:super_admin')->group(function () {
+        Route::get('/offices', [OfficeController::class, 'index']);
+        Route::post('/offices', [OfficeController::class, 'store']);
+        Route::put('/offices/{office}', [OfficeController::class, 'update']);
+        Route::patch('/offices/{office}', [OfficeController::class, 'toggleActive']);
+    });
+
     // Employee self‑service
-    Route::get('/offices', [OfficeController::class, 'index']);
     Route::get('/attendance/my-today', [AttendanceController::class, 'myToday']);
     Route::post('/attendance/logs', [AttendanceController::class, 'store']);
 
     // Admin analytics + staff data
     Route::get('/admin/attendance/today', [AdminAttendanceController::class, 'today']);
     Route::get('/admin/profiles', [AdminProfileController::class, 'index']);
-
-    // Office management
-    Route::post('/offices', [OfficeController::class, 'store']);
-    Route::put('/offices/{id}', [OfficeController::class, 'update']);
-    Route::patch('/offices/{id}', [OfficeController::class, 'toggleActive']);
 
     // Face verification
     Route::post('/face/verify', [FaceVerificationController::class, 'verify']);

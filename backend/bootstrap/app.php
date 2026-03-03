@@ -23,6 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // Sanctum SPA mode configuration
         $middleware->statefulApi();
 
+        // Spatie Permission (Laravel 12 does not auto-register these)
+        $middleware->alias([
+            'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission'         => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+        ]);
+
         // Reject oversized request bodies early (10MB cap)
         $middleware->append(\App\Http\Middleware\CheckPayloadSize::class);
     })

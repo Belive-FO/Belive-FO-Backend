@@ -2,9 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
@@ -23,14 +25,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'attendance.view-team',
             'attendance.create',
             'attendance.update',
-            
+
             // Leave permissions
             'leave.view-own',
             'leave.view-team',
             'leave.create',
             'leave.approve',
             'leave.reject',
-            
+
             // Claims permissions
             'claims.view-own',
             'claims.view-team',
@@ -93,5 +95,15 @@ class RolesAndPermissionsSeeder extends Seeder
         ]);
 
         $superAdmin->givePermissionTo(Permission::all());
+
+        // Create superadmin user
+        $user = User::firstOrCreate(
+            ['email' => 'superadmin@example.com'],
+            [
+                'name'     => 'Super Admin',
+                'password' => Hash::make('password'),
+            ]
+        );
+        $user->syncRoles($superAdmin);
     }
 }
