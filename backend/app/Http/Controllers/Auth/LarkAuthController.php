@@ -36,14 +36,14 @@ class LarkAuthController extends Controller
             // 1. Exchange code for tenant access token
             /** @var \Illuminate\Http\Client\Response $tokenResponse */
             $tokenResponse = Http::post('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal', [
-                'app_id'     => config('services.lark.app_id'),
+                'app_id' => config('services.lark.app_id'),
                 'app_secret' => config('services.lark.app_secret'),
             ]);
 
-            if (!$tokenResponse->successful()) {
+            if (! $tokenResponse->successful()) {
                 Log::error('Lark token exchange failed', [
                     'status' => $tokenResponse->status(),
-                    'body'   => $tokenResponse->body(),
+                    'body' => $tokenResponse->body(),
                 ]);
 
                 return $this->error(
@@ -56,7 +56,7 @@ class LarkAuthController extends Controller
 
             $accessToken = $tokenResponse->json('tenant_access_token');
 
-            if (!$accessToken) {
+            if (! $accessToken) {
                 Log::error('Lark tenant access token missing', ['response' => $tokenResponse->json()]);
 
                 return $this->error('LARK_AUTH_FAILED', 'Failed to get access token from Lark.', 401);
@@ -67,13 +67,13 @@ class LarkAuthController extends Controller
             $userResponse = Http::withToken($accessToken)
                 ->post('https://open.larksuite.com/open-apis/authen/v1/access_token', [
                     'grant_type' => 'authorization_code',
-                    'code'       => $request->code,
+                    'code' => $request->code,
                 ]);
 
-            if (!$userResponse->successful()) {
+            if (! $userResponse->successful()) {
                 Log::error('Lark user info fetch failed', [
                     'status' => $userResponse->status(),
-                    'code'   => $request->code,
+                    'code' => $request->code,
                 ]);
 
                 return $this->error('LARK_AUTH_FAILED', 'Failed to fetch user info from Lark.', 401);
@@ -81,7 +81,7 @@ class LarkAuthController extends Controller
 
             $larkUser = $userResponse->json('data');
 
-            if (!$larkUser || !isset($larkUser['open_id'])) {
+            if (! $larkUser || ! isset($larkUser['open_id'])) {
                 Log::error('Invalid Lark user data', ['response' => $userResponse->json()]);
 
                 return $this->error('LARK_AUTH_FAILED', 'Invalid user data received from Lark.', 401);
@@ -91,22 +91,20 @@ class LarkAuthController extends Controller
             $user = User::firstOrCreate(
                 ['lark_open_id' => $larkUser['open_id']],
                 [
-                    'email'          => $larkUser['email'] ?? null,
-                    'name'           => $larkUser['name'] ?? 'Unknown',
-                    'lark_union_id'  => $larkUser['union_id'] ?? null,
-                    'lark_user_id'   => $larkUser['user_id'] ?? null,
-                    'avatar_url'     => $larkUser['avatar_url'] ?? null,
-                    'password'       => Hash::make(Str::random(32)),
+                    'email' => $larkUser['email'] ?? null,
+                    'name' => $larkUser['name'] ?? 'Unknown',
+                    'lark_user_id' => $larkUser['user_id'] ?? null,
+                    'avatar_url' => $larkUser['avatar_url'] ?? null,
+                    'password' => Hash::make(Str::random(32)),
                 ]
             );
 
-            if (!$user->wasRecentlyCreated) {
+            if (! $user->wasRecentlyCreated) {
                 $user->update([
-                    'email'         => $larkUser['email'] ?? $user->email,
-                    'name'          => $larkUser['name'] ?? $user->name,
-                    'lark_union_id' => $larkUser['union_id'] ?? $user->lark_union_id,
-                    'lark_user_id'  => $larkUser['user_id'] ?? $user->lark_user_id,
-                    'avatar_url'    => $larkUser['avatar_url'] ?? $user->avatar_url,
+                    'email' => $larkUser['email'] ?? $user->email,
+                    'name' => $larkUser['name'] ?? $user->name,
+                    'lark_user_id' => $larkUser['user_id'] ?? $user->lark_user_id,
+                    'avatar_url' => $larkUser['avatar_url'] ?? $user->avatar_url,
                 ]);
             }
 
@@ -126,14 +124,14 @@ class LarkAuthController extends Controller
             $userForResponse['roles'] = $user->getRoleNames()->toArray();
 
             return $this->success([
-                'user'  => $userForResponse,
+                'user' => $userForResponse,
                 'token' => $token,
             ], 'Login successful.');
         } catch (\Exception $e) {
             Log::error('Lark authentication error', [
                 'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
 
             return $this->error(
@@ -154,7 +152,7 @@ class LarkAuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email'    => ['required', 'email'],
+            'email' => ['required', 'email'],
             'password' => ['required'],
         ]);
 
@@ -164,7 +162,7 @@ class LarkAuthController extends Controller
         if ($user) {
             $lockKey = "account_locked:{$user->id}";
             if (\Illuminate\Support\Facades\Cache::has($lockKey)) {
-                $remainingTime = \Illuminate\Support\Facades\Cache::get($lockKey . ':expires_at') - now()->timestamp;
+                $remainingTime = \Illuminate\Support\Facades\Cache::get($lockKey.':expires_at') - now()->timestamp;
 
                 return $this->error(
                     'ACCOUNT_LOCKED',
@@ -175,7 +173,7 @@ class LarkAuthController extends Controller
             }
         }
 
-        if (!Auth::attempt($credentials)) {
+        if (! Auth::attempt($credentials)) {
             if ($user) {
                 CheckAccountLocked::recordFailedAttempt($user->id);
             }
@@ -200,7 +198,7 @@ class LarkAuthController extends Controller
         $userForResponse['roles'] = $authenticatedUser->getRoleNames()->toArray();
 
         return $this->success([
-            'user'  => $userForResponse,
+            'user' => $userForResponse,
             'token' => $token,
         ], 'Login successful.');
     }
