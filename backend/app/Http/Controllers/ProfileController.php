@@ -32,32 +32,32 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'fullName'      => ['sometimes', 'string', 'max:255'],
-            'phone'         => ['sometimes', 'nullable', 'string', 'max:50'],
-            'department'    => ['sometimes', 'nullable', 'string', 'max:255'],
-            'employeeId'    => ['sometimes', 'nullable', 'string', 'max:255'],
-            'avatarUrl'     => ['sometimes', 'nullable', 'string', 'max:2048'],
-            'faceFrontUrl'  => ['sometimes', 'nullable', 'string', 'max:2048'],
-            'faceLeftUrl'   => ['sometimes', 'nullable', 'string', 'max:2048'],
-            'faceRightUrl'  => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'full_name'      => ['sometimes', 'string', 'max:255'],
+            'phone'          => ['sometimes', 'nullable', 'string', 'max:50'],
+            'department'     => ['sometimes', 'nullable', 'string', 'max:255'],
+            'employee_id'    => ['sometimes', 'nullable', 'string', 'max:255'],
+            'avatar_url'     => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'face_front_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'face_left_url'  => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'face_right_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
         ]);
 
-        if (array_key_exists('fullName', $data)) {
-            $user->name = $data['fullName'];
+        if (array_key_exists('full_name', $data)) {
+            $user->name = $data['full_name'];
         }
 
-        if (array_key_exists('avatarUrl', $data)) {
-            $user->avatar_url = $data['avatarUrl'];
+        if (array_key_exists('avatar_url', $data)) {
+            $user->avatar_url = $data['avatar_url'];
         }
 
-        if (array_key_exists('faceFrontUrl', $data)) {
-            $user->face_front_url = $data['faceFrontUrl'];
+        if (array_key_exists('face_front_url', $data)) {
+            $user->face_front_url = $data['face_front_url'];
         }
-        if (array_key_exists('faceLeftUrl', $data)) {
-            $user->face_left_url = $data['faceLeftUrl'];
+        if (array_key_exists('face_left_url', $data)) {
+            $user->face_left_url = $data['face_left_url'];
         }
-        if (array_key_exists('faceRightUrl', $data)) {
-            $user->face_right_url = $data['faceRightUrl'];
+        if (array_key_exists('face_right_url', $data)) {
+            $user->face_right_url = $data['face_right_url'];
         }
 
         // phone, department, employeeId are not persisted in the users table yet.

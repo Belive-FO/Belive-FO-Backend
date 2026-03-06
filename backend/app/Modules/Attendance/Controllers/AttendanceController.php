@@ -10,9 +10,45 @@ use App\Services\GeoService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class AttendanceController extends Controller
 {
+    /**
+     * Upload a clock-in/clock-out selfie. Returns the stored photo URL to send as photo_url in POST /attendance/logs.
+     * Expects multipart/form-data with field "photo" (image file, max 5 MB).
+     */
+    public function uploadPhoto(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'photo' => ['required', 'file', 'image', 'max:5120'], // 5 MB
+        ]);
+
+        $file = $data['photo'];
+        $disk = config('filesystems.default');
+        $directory = 'attendance-selfies/' . $user->id;
+        $filename = Str::uuid() . '.' . $file->extension();
+        $path = $file->storeAs($directory, $filename, $disk);
+
+        if (! $path) {
+            throw ValidationException::withMessages([
+                'photo' => ['Failed to store photo.'],
+            ]);
+        }
+
+        $url = Storage::disk($disk)->url($path);
+
+        return response()->json([
+            'data' => [
+                'url' => $url,
+            ],
+        ]);
+    }
+
     public function myToday(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -38,16 +74,16 @@ class AttendanceController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'type'     => ['required', 'in:clock_in,clock_out'],
-            'officeId' => ['required', 'string', 'exists:offices,id'],
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
-            'longitude'=> ['required', 'numeric', 'between:-180,180'],
-            'photoUrl' => ['nullable', 'string'],
-            'notes'    => ['nullable', 'string'],
+            'type'       => ['required', 'in:clock_in,clock_out'],
+            'office_id'  => ['required', 'string', 'exists:offices,id'],
+            'latitude'   => ['required', 'numeric', 'between:-90,90'],
+            'longitude'  => ['required', 'numeric', 'between:-180,180'],
+            'photo_url'  => ['nullable', 'string'],
+            'notes'      => ['nullable', 'string'],
         ]);
 
         /** @var \App\Models\Office $office */
-        $office = Office::findOrFail($data['officeId']);
+        $office = Office::findOrFail($data['office_id']);
 
         $distance = GeoService::distanceInMeters(
             (float) $office->latitude,
@@ -116,7 +152,7 @@ class AttendanceController extends Controller
             'latitude'       => $data['latitude'],
             'longitude'      => $data['longitude'],
             'distance_meters'=> (int) round($distance),
-            'photo_url'      => $data['photoUrl'] ?? null,
+            'photo_url'      => $data['photo_url'] ?? null,
             'notes'          => $data['notes'] ?? null,
         ]);
 

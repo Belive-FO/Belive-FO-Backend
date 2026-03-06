@@ -18,6 +18,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Employee self‑service
     Route::get('/attendance/my-today', [AttendanceController::class, 'myToday']);
+    Route::post('/attendance/upload-photo', [AttendanceController::class, 'uploadPhoto']);
     Route::post('/attendance/logs', [AttendanceController::class, 'store']);
 
     // Admin analytics + staff data
