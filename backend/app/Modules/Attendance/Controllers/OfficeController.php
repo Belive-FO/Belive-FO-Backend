@@ -14,9 +14,13 @@ class OfficeController extends Controller
     {
         $query = Office::query();
 
-        if ($request->filled('is_active')) {
+        $canViewInactive = $request->user()?->hasAnyRole(['super_admin', 'hr_admin']) === true;
+
+        if ($request->filled('is_active') && $canViewInactive) {
             $isActive = filter_var($request->query('is_active'), FILTER_VALIDATE_BOOLEAN);
             $query->where('is_active', $isActive);
+        } else {
+            $query->where('is_active', true);
         }
 
         $offices = $query->orderBy('name')->get();
@@ -27,23 +31,23 @@ class OfficeController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'          => ['required', 'string', 'max:255'],
-            'address'       => ['nullable', 'string', 'max:500'],
-            'latitude'      => ['required', 'numeric', 'between:-90,90'],
-            'longitude'     => ['required', 'numeric', 'between:-180,180'],
+            'name' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
             'radius_meters' => ['required', 'integer', 'min:1'],
-            'is_active'     => ['required', 'boolean'],
-            'timezone'      => ['nullable', 'string', 'max:100'],
+            'is_active' => ['required', 'boolean'],
+            'timezone' => ['nullable', 'string', 'max:100'],
         ]);
 
         $office = Office::create([
-            'name'          => $data['name'],
-            'address'       => $data['address'] ?? null,
-            'latitude'      => $data['latitude'],
-            'longitude'     => $data['longitude'],
+            'name' => $data['name'],
+            'address' => $data['address'] ?? null,
+            'latitude' => $data['latitude'],
+            'longitude' => $data['longitude'],
             'radius_meters' => $data['radius_meters'],
-            'is_active'     => $data['is_active'],
-            'timezone'      => $data['timezone'] ?? null,
+            'is_active' => $data['is_active'],
+            'timezone' => $data['timezone'] ?? null,
         ]);
 
         return response()->json(['data' => new OfficeResource($office)], 201);
@@ -52,23 +56,23 @@ class OfficeController extends Controller
     public function update(Office $office, Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'          => ['required', 'string', 'max:255'],
-            'address'       => ['nullable', 'string', 'max:500'],
-            'latitude'      => ['required', 'numeric', 'between:-90,90'],
-            'longitude'     => ['required', 'numeric', 'between:-180,180'],
+            'name' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
             'radius_meters' => ['required', 'integer', 'min:1'],
-            'is_active'     => ['required', 'boolean'],
-            'timezone'      => ['nullable', 'string', 'max:100'],
+            'is_active' => ['required', 'boolean'],
+            'timezone' => ['nullable', 'string', 'max:100'],
         ]);
 
         $office->update([
-            'name'          => $data['name'],
-            'address'       => $data['address'] ?? null,
-            'latitude'      => $data['latitude'],
-            'longitude'     => $data['longitude'],
+            'name' => $data['name'],
+            'address' => $data['address'] ?? null,
+            'latitude' => $data['latitude'],
+            'longitude' => $data['longitude'],
             'radius_meters' => $data['radius_meters'],
-            'is_active'     => $data['is_active'],
-            'timezone'      => $data['timezone'] ?? null,
+            'is_active' => $data['is_active'],
+            'timezone' => $data['timezone'] ?? null,
         ]);
 
         return response()->json(['data' => new OfficeResource($office)]);
@@ -85,10 +89,9 @@ class OfficeController extends Controller
 
         return response()->json([
             'data' => [
-                'id'        => $office->id,
+                'id' => $office->id,
                 'is_active' => $office->is_active,
             ],
         ]);
     }
 }
-

@@ -8,9 +8,11 @@ use App\Modules\Attendance\Controllers\OfficeController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
-    // Office CRUD — Superadmin only (spec: all 4 endpoints require superadmin)
-    Route::middleware('role:super_admin')->group(function () {
-        Route::get('/offices', [OfficeController::class, 'index']);
+    // Office list — all authenticated users can select an active working location.
+    Route::get('/offices', [OfficeController::class, 'index']);
+
+    // Office management — restricted to elevated roles.
+    Route::middleware('role:super_admin|hr_admin')->group(function () {
         Route::post('/offices', [OfficeController::class, 'store']);
         Route::put('/offices/{office}', [OfficeController::class, 'update']);
         Route::patch('/offices/{office}', [OfficeController::class, 'toggleActive']);
@@ -28,4 +30,3 @@ Route::middleware('auth:sanctum')->group(function () {
     // Face verification
     Route::post('/face/verify', [FaceVerificationController::class, 'verify']);
 });
-
