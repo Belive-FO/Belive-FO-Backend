@@ -15,10 +15,12 @@ class RolesAndPermissionsSeeder extends Seeder
      */
     public function run(): void
     {
+        $guardName = 'sanctum';
+
         // Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // Create permissions
+        // Create permissions (sanctum guard for API)
         $permissions = [
             // Attendance permissions
             'attendance.view-own',
@@ -42,16 +44,18 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission]);
+            Permission::firstOrCreate(
+                ['name' => $permission, 'guard_name' => $guardName]
+            );
         }
 
-        // Create roles
-        $employee = Role::firstOrCreate(['name' => 'employee']);
-        $manager = Role::firstOrCreate(['name' => 'manager']);
-        $hrAdmin = Role::firstOrCreate(['name' => 'hr_admin']);
-        $superAdmin = Role::firstOrCreate(['name' => 'super_admin']);
+        // Create roles (sanctum guard for API)
+        $employee = Role::firstOrCreate(['name' => 'employee', 'guard_name' => $guardName]);
+        $manager = Role::firstOrCreate(['name' => 'manager', 'guard_name' => $guardName]);
+        $hrAdmin = Role::firstOrCreate(['name' => 'hr_admin', 'guard_name' => $guardName]);
+        $superAdmin = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => $guardName]);
 
-        // Assign permissions to roles
+        // Assign permissions to roles (same guard)
         $employee->givePermissionTo([
             'attendance.view-own',
             'attendance.create',
@@ -94,7 +98,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'claims.reject',
         ]);
 
-        $superAdmin->givePermissionTo(Permission::all());
+        $superAdmin->givePermissionTo(
+            Permission::where('guard_name', $guardName)->pluck('name')->toArray()
+        );
 
         // Create superadmin user
         $user = User::firstOrCreate(
@@ -105,5 +111,17 @@ class RolesAndPermissionsSeeder extends Seeder
             ]
         );
         $user->syncRoles($superAdmin);
+
+        // Ensure users who have web guard roles also have the same roles for sanctum (API)
+        $sanctumRolesByName = Role::where('guard_name', $guardName)->get()->keyBy('name');
+        foreach (User::all() as $existingUser) {
+            $webRoleNames = $existingUser->roles()->where('guard_name', 'web')->pluck('name');
+            $existingSanctumRoleNames = $existingUser->roles()->where('guard_name', $guardName)->pluck('name');
+            $roleNamesToAssign = $webRoleNames->merge($existingSanctumRoleNames)->unique()->values();
+            $sanctumRolesToAssign = $roleNamesToAssign->map(fn ($name) => $sanctumRolesByName->get($name))->filter()->values()->all();
+            if (count($sanctumRolesToAssign) > 0) {
+                $existingUser->syncRoles($sanctumRolesToAssign);
+            }
+        }
     }
 }

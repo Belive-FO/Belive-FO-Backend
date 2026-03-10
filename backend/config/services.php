@@ -48,4 +48,13 @@ return [
         'app_secret' => env('LARK_APP_SECRET'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Google Maps (Places, Distance Matrix)
+    |--------------------------------------------------------------------------
+    */
+    'google_maps' => [
+        'api_key' => env('GOOGLE_PLACES_API_KEY'),
+    ],
+
 ];

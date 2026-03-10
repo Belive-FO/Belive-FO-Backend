@@ -52,4 +52,28 @@ class ClaimPolicy
     {
         return $user->hasPermissionTo('claims.reject');
     }
+
+    /**
+     * Determine whether the user can update the claim record (e.g. draft).
+     */
+    public function update(User $user, $claim): bool
+    {
+        return $this->view($user, $claim);
+    }
+
+    /**
+     * Determine whether the user can delete the claim record (e.g. draft).
+     */
+    public function delete(User $user, $claim): bool
+    {
+        return $this->view($user, $claim);
+    }
+
+    /**
+     * Determine whether the user can mark the claim as paid (HR/admin).
+     */
+    public function markPaid(User $user, $claim): bool
+    {
+        return $user->hasPermissionTo('claims.approve');
+    }
 }

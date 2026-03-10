@@ -2,6 +2,7 @@
 
 namespace App\Modules\Claims;
 
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class ClaimsServiceProvider extends ServiceProvider
@@ -10,17 +11,17 @@ class ClaimsServiceProvider extends ServiceProvider
     {
         // Register claims module bindings here
     }
-    
+
     public function boot(): void
     {
-        // Load routes if they exist
-        if (file_exists(__DIR__ . '/Controllers/routes.php')) {
-            $this->loadRoutesFrom(__DIR__ . '/Controllers/routes.php');
+        // Load routes under /api so they match frontend proxy
+        if (file_exists(__DIR__.'/api.php')) {
+            Route::prefix('api')->middleware('api')->group(__DIR__.'/api.php');
         }
-        
+
         // Load migrations if they exist
-        if (is_dir(__DIR__ . '/Migrations')) {
-            $this->loadMigrationsFrom(__DIR__ . '/Migrations');
+        if (is_dir(__DIR__.'/Migrations')) {
+            $this->loadMigrationsFrom(__DIR__.'/Migrations');
         }
     }
 }

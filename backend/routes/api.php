@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Auth\LarkAuthController;
+use App\Http\Controllers\GeocodeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReverseGeocodeController;
 use Illuminate\Support\Facades\Route;
 
 // Public auth routes
@@ -20,4 +22,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile/me', [ProfileController::class, 'me']);
     Route::put('/profile/me', [ProfileController::class, 'updateMe']);
     Route::post('/profile/face-photo', [ProfileController::class, 'uploadFacePhoto']);
+
+    // Geocode (Google Geocoding API, server-side)
+    Route::post('/geocode', [GeocodeController::class, 'geocode']);
+    Route::post('/reverse-geocode', [ReverseGeocodeController::class, 'reverseGeocode']);
 });
