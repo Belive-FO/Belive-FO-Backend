@@ -30,8 +30,8 @@ class AttendanceController extends Controller
 
         $file = $data['photo'];
         $disk = config('filesystems.default');
-        $directory = 'attendance-selfies/' . $user->id;
-        $filename = Str::uuid() . '.' . $file->extension();
+        $directory = 'attendance-selfies/'.$user->id;
+        $filename = Str::uuid().'.'.$file->extension();
         $path = $file->storeAs($directory, $filename, $disk);
 
         if (! $path) {
@@ -56,10 +56,10 @@ class AttendanceController extends Controller
         $timezone = config('app.timezone', 'UTC');
 
         $startLocal = Carbon::today($timezone)->startOfDay();
-        $endLocal   = Carbon::today($timezone)->endOfDay();
+        $endLocal = Carbon::today($timezone)->endOfDay();
 
         $startUtc = $startLocal->clone()->setTimezone('UTC');
-        $endUtc   = $endLocal->clone()->setTimezone('UTC');
+        $endUtc = $endLocal->clone()->setTimezone('UTC');
 
         $logs = AttendanceLog::where('user_id', $user->id)
             ->whereBetween('timestamp', [$startUtc, $endUtc])
@@ -74,12 +74,12 @@ class AttendanceController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'type'       => ['required', 'in:clock_in,clock_out'],
-            'office_id'  => ['required', 'string', 'exists:offices,id'],
-            'latitude'   => ['required', 'numeric', 'between:-90,90'],
-            'longitude'  => ['required', 'numeric', 'between:-180,180'],
-            'photo_url'  => ['nullable', 'string'],
-            'notes'      => ['nullable', 'string'],
+            'type' => ['required', 'in:clock_in,clock_out'],
+            'office_id' => ['required', 'string', 'exists:offices,id'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'photo_url' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         /** @var \App\Models\Office $office */
@@ -94,28 +94,35 @@ class AttendanceController extends Controller
 
         if ($distance > $office->radius_meters) {
             return response()->json([
-                'error'   => 'OUT_OF_RADIUS',
+                'error' => 'OUT_OF_RADIUS',
                 'message' => sprintf(
                     'You are %.1f meters from %s. You must be within %d meters to clock in/out.',
                     $distance,
                     $office->name,
                     $office->radius_meters
                 ),
-                'status'  => 422,
+                'status' => 422,
             ], 422);
         }
 
-        // Prevent obvious double clock_in without clock_out
+        // Prevent double clock_in without clock_out — only within today
         if ($data['type'] === 'clock_in') {
-            $lastLog = AttendanceLog::where('user_id', $user->id)
+            $timezone = config('app.timezone', 'UTC');
+            $startLocal = Carbon::today($timezone)->startOfDay();
+            $endLocal = Carbon::today($timezone)->endOfDay();
+            $startUtc = $startLocal->clone()->setTimezone('UTC');
+            $endUtc = $endLocal->clone()->setTimezone('UTC');
+
+            $lastLogToday = AttendanceLog::where('user_id', $user->id)
+                ->whereBetween('timestamp', [$startUtc, $endUtc])
                 ->orderByDesc('timestamp')
                 ->first();
 
-            if ($lastLog && $lastLog->type === 'clock_in') {
+            if ($lastLogToday && $lastLogToday->type === 'clock_in') {
                 return response()->json([
-                    'error'   => 'ALREADY_CLOCKED_IN',
+                    'error' => 'ALREADY_CLOCKED_IN',
                     'message' => 'You are already clocked in.',
-                    'status'  => 422,
+                    'status' => 422,
                 ], 422);
             }
         }
@@ -123,9 +130,9 @@ class AttendanceController extends Controller
         if ($data['type'] === 'clock_out') {
             $timezone = config('app.timezone', 'UTC');
             $startLocal = Carbon::today($timezone)->startOfDay();
-            $endLocal   = Carbon::today($timezone)->endOfDay();
-            $startUtc   = $startLocal->clone()->setTimezone('UTC');
-            $endUtc     = $endLocal->clone()->setTimezone('UTC');
+            $endLocal = Carbon::today($timezone)->endOfDay();
+            $startUtc = $startLocal->clone()->setTimezone('UTC');
+            $endUtc = $endLocal->clone()->setTimezone('UTC');
 
             $hasClockInToday = AttendanceLog::where('user_id', $user->id)
                 ->where('type', 'clock_in')
@@ -134,9 +141,9 @@ class AttendanceController extends Controller
 
             if (! $hasClockInToday) {
                 return response()->json([
-                    'error'   => 'NO_CLOCK_IN_TODAY',
+                    'error' => 'NO_CLOCK_IN_TODAY',
                     'message' => 'You have not clocked in today.',
-                    'status'  => 422,
+                    'status' => 422,
                 ], 422);
             }
         }
@@ -144,22 +151,21 @@ class AttendanceController extends Controller
         $timestampUtc = now()->setTimezone('UTC');
 
         $log = AttendanceLog::create([
-            'user_id'        => $user->id,
-            'office_id'      => $office->id,
-            'type'           => $data['type'],
-            'status'         => 'valid',
-            'timestamp'      => $timestampUtc,
-            'latitude'       => $data['latitude'],
-            'longitude'      => $data['longitude'],
-            'distance_meters'=> (int) round($distance),
-            'photo_url'      => $data['photo_url'] ?? null,
-            'notes'          => $data['notes'] ?? null,
+            'user_id' => $user->id,
+            'office_id' => $office->id,
+            'type' => $data['type'],
+            'status' => 'valid',
+            'timestamp' => $timestampUtc,
+            'latitude' => $data['latitude'],
+            'longitude' => $data['longitude'],
+            'distance_meters' => (int) round($distance),
+            'photo_url' => $data['photo_url'] ?? null,
+            'notes' => $data['notes'] ?? null,
         ]);
 
         return response()->json([
-            'log'            => new AttendanceLogResource($log),
+            'log' => new AttendanceLogResource($log),
             'distanceMeters' => (int) round($distance),
         ]);
     }
 }
-
