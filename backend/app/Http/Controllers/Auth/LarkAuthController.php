@@ -108,12 +108,7 @@ class LarkAuthController extends Controller
                 ]);
             }
 
-            // 4. Create session + Bearer token
-            Auth::login($user);
-            if ($request->hasSession()) {
-                $request->session()->regenerate();
-            }
-
+            // 4. Create Bearer token (no session — Sanctum token only)
             $user->last_login_at = now();
             $user->save();
             $user = $user->fresh()->load('roles');
