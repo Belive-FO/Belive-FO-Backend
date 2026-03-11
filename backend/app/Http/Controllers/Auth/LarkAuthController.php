@@ -173,7 +173,7 @@ class LarkAuthController extends Controller
             }
         }
 
-        if (! Auth::attempt($credentials)) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             if ($user) {
                 CheckAccountLocked::recordFailedAttempt($user->id);
             }
@@ -181,7 +181,7 @@ class LarkAuthController extends Controller
             return $this->error('INVALID_CREDENTIALS', 'Invalid credentials.', 401);
         }
 
-        $authenticatedUser = $request->user();
+        $authenticatedUser = $user;
         CheckAccountLocked::clearFailedAttempts($authenticatedUser->id);
 
         if ($request->hasSession()) {
