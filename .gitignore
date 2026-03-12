@@ -1,53 +1,62 @@
-# OS Files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Desktop.ini
+# Laravel Default
+.phpactor.json
+.phpunit.result.cache
+/.fleet
+/.nova
+/.phpunit.cache
+/.zed
+/auth.json
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+Homestead.json
+Homestead.yaml
 
-# IDE Files
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.project
-.classpath
-.settings/
-*.sublime-project
-*.sublime-workspace
+# Laravel Boost (AI Development)
+/.cursor/
+/.ai/
+/AGENTS.md
+/boost.json
+/.mcp.json
+
+# IDE Helper
+_ide_helper.php
+_ide_helper_models.php
+.phpstorm.meta.php
+
+# Testing
+/.phpunit.cache/
+/coverage/
+.phpunit.result.cache
+
+# Cache
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
 
 # Logs
-*.log
-logs/
+/storage/logs/*.log
+!/storage/logs/.gitignore
 
-# Personal planning (implementation plans, local notes)
-TODO.md
+# Composer
+/vendor/
+composer.phar
 
-# Environment files
+# NPM
+package-lock.json
+yarn.lock
+
+# Environment
 .env
-.env.local
-.env.*.local
+.env.backup
+.env.production
+.env.*
+!.env.example
 
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.backup
-
-# Documentation build
-docs/_build/
-
-# Node modules (if any at root)
-node_modules/
-
-# Build artifacts
-dist/
-build/
-
-RenoXpert-Backend
-
-todo.md
+# Database
+*.sqlite
+*.sqlite-journal
+*.db

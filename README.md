@@ -1,121 +1,253 @@
-# BeLive FlowOffice
+# BeLive FlowOffice - Backend
 
-> Enterprise FlowOffice Management System - A modular monolith built with Laravel and Supabase
+Laravel 12 backend application for the BeLive FlowOffice management system.
 
-## Overview
-
-BeLive FlowOffice is a comprehensive enterprise management system designed for modern organizations. The system provides modules for attendance tracking, leave management, and claims processing, built using a modular monolith architecture.
-
-## Architecture
-
-This project follows a **modular monolith** architecture pattern, allowing for clean separation of concerns while maintaining a single deployable application. Each module is self-contained with its own domain logic, but shares common infrastructure.
-
-### Tech Stack
-
-- **Backend**: Laravel 12 (PHP 8.3+)
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Laravel Sanctum
-- **Authorization**: Spatie Laravel Permission
-- **AI Development**: Laravel Boost (for Cursor/Claude Code)
-- **Frontend**: Vite + Tailwind CSS
-
-## Project Structure
-
-```
-Belive-FO/
-├── backend/              # Laravel backend application
-│   ├── app/             # Application code
-│   │   └── Modules/    # Modular monolith modules
-│   ├── config/         # Configuration files
-│   ├── database/       # Migrations and seeders
-│   ├── docs/           # Documentation
-│   └── tests/          # Test suite
-├── Backend-System-Architecture.md
-└── Belive-FO-Implementation-Plan.md
-```
-
-## Getting Started
-
-### Prerequisites
+## Requirements
 
 - PHP 8.3 or higher
 - Composer
-- Node.js and npm
-- Supabase account and project
+- Node.js 18+ and npm
+- PostgreSQL (via Supabase) or SQLite for local development
 
-### Quick Start
+### Required PHP Extensions
 
-1. **Clone the repository**
+- `mbstring`
+- `pdo`
+- `pdo_pgsql` (for Supabase/PostgreSQL)
+- `pdo_sqlite` (optional, for local development)
+
+## Installation
+
+1. **Install dependencies**
    ```bash
-   git clone <repository-url>
-   cd Belive-FO
+   composer install
+   npm install
    ```
 
-2. **Set up the backend**
+2. **Environment setup**
    ```bash
-   cd backend
-   composer install
    cp .env.example .env
    php artisan key:generate
    ```
 
 3. **Configure environment variables**
-   - Copy `.env.example` to `.env`
-   - Configure Supabase credentials (see `backend/.env.example`)
-   - Set up database connection
+   
+   Edit `.env` and configure:
+   - Supabase credentials (see `.env.example` for details)
+   - Database connection
+   - Cache driver (recommended: `CACHE_STORE=file` for development)
 
-4. **Install dependencies and run**
+4. **Run setup script**
    ```bash
-   composer run setup  # Installs dependencies and builds assets
-   composer run dev    # Starts development server
+   composer run setup
    ```
-
-## Documentation
-
-- [Backend Module Structure](backend/docs/MODULE_STRUCTURE.md) - Architecture and module organization
-- [Laravel Boost Installation](backend/docs/LARAVEL_BOOST_INSTALLATION.md) - AI development setup
-- [Test Plan](backend/docs/TEST_PLAN.md) - Testing strategy and guidelines
-- [Implementation Plan](Belive-FO-Implementation-Plan.md) - Complete implementation guide
-- [System Architecture](Backend-System-Architecture.md) - System design and architecture
+   
+   This will:
+   - Install Composer dependencies
+   - Copy `.env` if it doesn't exist
+   - Generate application key
+   - Run migrations
+   - Install npm dependencies
+   - Build assets
 
 ## Development
 
-### Backend Development
+### Start Development Server
 
-See [backend/README.md](backend/README.md) for detailed backend setup instructions.
+```bash
+composer run dev
+```
+
+This starts:
+- Laravel development server
+- Queue worker
+- Log viewer (Pail)
+- Vite dev server
 
 ### Available Commands
 
 ```bash
-# Backend
-cd backend
-composer run dev      # Start development server
-composer run test     # Run tests
-php artisan supabase:test  # Test Supabase connection
+# Testing
+composer run test              # Run all tests
+php artisan test --filter=TestName  # Run specific test
+
+# Code Quality
+vendor/bin/pint --dirty       # Format code
+
+# Supabase
+php artisan supabase:test      # Test Supabase connection
+php artisan supabase:seed      # Seed database using SQL files
+
+# Laravel Boost (AI Development)
+php artisan boost:install      # Install/update Boost
+php artisan boost:update       # Update Boost resources
+php artisan boost:mcp          # Start MCP server
 ```
 
-## Modules
+## Database Seeding
 
-The application is organized into the following modules:
+### Supabase SQL Seeding
 
-- **Attendance** - Clock in/out, attendance tracking
-- **Leave** - Leave requests and approvals
-- **Claims** - Expense claims and reimbursements
+The project uses SQL files for seeding Supabase database. This approach is recommended for infrastructure setup and initial data.
 
-Each module follows Domain-Driven Design principles with clear boundaries.
+**Location:** SQL seed files are stored in `database/seeds/sql/`
 
-## Contributing
+**Usage:**
+```bash
+# Seed all SQL files (executed in alphabetical order)
+php artisan supabase:seed
 
-1. Follow the modular monolith architecture guidelines
-2. Write tests for new features
-3. Follow Laravel coding standards (Pint)
-4. Update documentation as needed
+# Seed a specific file
+php artisan supabase:seed 001_initial_setup.sql
+```
+
+**Safety Features:**
+- Automatically blocks DELETE, TRUNCATE, and DROP operations
+- Uses transactions for rollback on errors
+- Requires `--force` flag for dangerous operations
+- Warns in production environment
+
+**File Naming Convention:**
+- Use numbered prefixes: `001_description.sql`, `002_description.sql`
+- Files are executed in alphabetical order
+
+**Example:**
+```bash
+# Create your seed file
+# database/seeds/sql/001_initial_setup.sql
+
+# Run the seeder
+php artisan supabase:seed
+
+# Or seed specific file
+php artisan supabase:seed 001_initial_setup.sql
+```
+
+> See [docs/SUPABASE_SEEDING.md](docs/SUPABASE_SEEDING.md) for detailed guide and best practices.
+
+## Project Structure
+
+### Modular Monolith Architecture
+
+The application follows a modular monolith pattern:
+
+```
+app/Modules/
+├── Shared/          # Cross-cutting concerns
+│   ├── Contracts/   # Interfaces
+│   ├── Events/      # Domain events
+│   └── ValueObjects/
+├── Attendance/      # Attendance module
+├── Leave/           # Leave management module
+└── Claims/          # Claims module
+```
+
+See [docs/MODULE_STRUCTURE.md](docs/MODULE_STRUCTURE.md) for detailed architecture documentation.
+
+## Configuration
+
+### Supabase
+
+Configure Supabase in `.env`:
+
+```env
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_KEY=your-anon-key
+SUPABASE_SECRET=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+```
+
+Test connection:
+```bash
+php artisan supabase:test
+```
+
+### Laravel Boost
+
+For AI-assisted development with Cursor/Claude Code:
+
+1. Install Boost: `php artisan boost:install`
+2. Configure MCP server (see [docs/LARAVEL_BOOST_INSTALLATION.md](docs/LARAVEL_BOOST_INSTALLATION.md))
+3. Set `CACHE_STORE=file` in `.env` for development
+
+## Testing
+
+Tests are located in the `tests/` directory:
+
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test file
+php artisan test tests/Feature/ExampleTest.php
+
+# Run with filter
+php artisan test --filter=testName
+```
+
+See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for testing guidelines.
+
+## Code Style
+
+This project uses Laravel Pint for code formatting:
+
+```bash
+vendor/bin/pint --dirty
+```
+
+## Documentation
+
+- [Module Structure](docs/MODULE_STRUCTURE.md) - Architecture details
+- [Laravel Boost Installation](docs/LARAVEL_BOOST_INSTALLATION.md) - AI development setup
+- [Test Plan](docs/TEST_PLAN.md) - Testing strategy
+
+## Key Packages
+
+### Production
+
+- `laravel/framework` ^12.0
+- `saeedvir/supabase` ^1.0 - Supabase integration & JWT generation
+- `spatie/laravel-activitylog` ^4.11 - Audit trail logging
+
+#### Not Used (Replaced by Supabase-First Architecture)
+
+- ~~`laravel/sanctum`~~ - Replaced by Supabase JWT (validated by Next.js BFF)
+- ~~`spatie/laravel-permission`~~ - Replaced by Supabase RLS policies
+
+> See [Architecture Decisions](docs/ARCHITECTURE-DECISIONS.md) for details on the Supabase-first approach.
+
+### Development
+
+- `laravel/boost` ^2.1 - AI development assistant
+- `laravel/pint` ^1.24 - Code formatter
+- `phpunit/phpunit` ^11.5.3 - Testing framework
+
+## Troubleshooting
+
+### MCP Server Issues
+
+If Laravel Boost MCP server fails to start:
+
+1. Check PHP extensions: `php -m | grep mbstring`
+2. Set `CACHE_STORE=file` in `.env`
+3. Clear config cache: `php artisan config:clear`
+4. See [Laravel Boost Installation Guide](docs/LARAVEL_BOOST_INSTALLATION.md)
+
+### Database Connection Issues
+
+1. Verify Supabase credentials in `.env`
+2. Test connection: `php artisan supabase:test`
+3. Check PDO drivers: `php -m | grep pdo`
+
+### Cache Issues
+
+For development, use file cache:
+```env
+CACHE_STORE=file
+```
+
+This avoids database dependencies and PDO driver requirements.
 
 ## License
 
 [Your License Here]
-
-## Support
-
-For questions or issues, please refer to the documentation in the `backend/docs/` directory.
-
