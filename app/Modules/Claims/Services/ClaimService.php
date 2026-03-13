@@ -20,7 +20,7 @@ class ClaimService
 
         $query = Claim::query()
             ->where('user_id', $user->id)
-            ->with(['category', 'mileageDetail', 'attachments'])
+            ->with(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments'])
             ->orderByDesc('created_at');
 
         if (! empty($filters['status'])) {
@@ -47,6 +47,8 @@ class ClaimService
                 'category_id' => $data['category_id'] ?? null,
                 'title' => $data['title'],
                 'type' => $data['type'],
+                'claim_type_id' => isset($data['claim_type_id']) ? (int) $data['claim_type_id'] : null,
+                'subclaim_type_id' => isset($data['subclaim_type_id']) ? (int) $data['subclaim_type_id'] : null,
                 'amount' => $amount,
                 'claim_date' => $data['claim_date'],
                 'description' => $data['description'] ?? null,
@@ -67,13 +69,13 @@ class ClaimService
 
             $this->logStatus($claim->id, null, $status, $user->id);
 
-            return $claim->load(['category', 'mileageDetail', 'attachments']);
+            return $claim->load(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
         });
     }
 
     public function show(Claim $claim): Claim
     {
-        $claim->load(['category', 'mileageDetail', 'attachments']);
+        $claim->load(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
 
         return $claim;
     }
@@ -96,6 +98,8 @@ class ClaimService
             $claim->update(array_filter([
                 'title' => $data['title'] ?? $claim->title,
                 'type' => $data['type'] ?? $claim->type,
+                'claim_type_id' => array_key_exists('claim_type_id', $data) ? ($data['claim_type_id'] ? (int) $data['claim_type_id'] : null) : $claim->claim_type_id,
+                'subclaim_type_id' => array_key_exists('subclaim_type_id', $data) ? ($data['subclaim_type_id'] ? (int) $data['subclaim_type_id'] : null) : $claim->subclaim_type_id,
                 'category_id' => $data['category_id'] ?? $claim->category_id,
                 'amount' => $amount,
                 'claim_date' => $data['claim_date'] ?? $claim->claim_date,
@@ -119,7 +123,7 @@ class ClaimService
                 }
             }
 
-            return $claim->fresh(['category', 'mileageDetail', 'attachments']);
+            return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
         });
     }
 
@@ -152,7 +156,7 @@ class ClaimService
                 ClaimCategory::where('id', $claim->category_id)->increment('spent', $claim->amount);
             }
 
-            return $claim->fresh(['category', 'mileageDetail', 'attachments']);
+            return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
         });
     }
 
@@ -171,7 +175,7 @@ class ClaimService
             ]);
             $this->logStatus($claim->id, $claim->getOriginal('status'), Claim::STATUS_REJECTED, $rejector->id, $reason);
 
-            return $claim->fresh(['category', 'mileageDetail', 'attachments']);
+            return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
         });
     }
 
@@ -188,7 +192,7 @@ class ClaimService
             ]);
             $this->logStatus($claim->id, $claim->getOriginal('status'), Claim::STATUS_PAID, $user->id);
 
-            return $claim->fresh(['category', 'mileageDetail', 'attachments']);
+            return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
         });
     }
 
@@ -198,7 +202,7 @@ class ClaimService
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
 
         $query = Claim::query()
-            ->with(['category', 'mileageDetail', 'attachments', 'user:id,name,email'])
+            ->with(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments', 'user:id,name,email'])
             ->orderByDesc('created_at');
 
         if (! empty($filters['status'])) {

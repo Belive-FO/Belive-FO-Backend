@@ -4,9 +4,25 @@ use App\Modules\Claims\Controllers\ClaimApprovalController;
 use App\Modules\Claims\Controllers\ClaimAttachmentController;
 use App\Modules\Claims\Controllers\ClaimController;
 use App\Modules\Claims\Controllers\ClaimStatsController;
+use App\Modules\Claims\Controllers\ClaimTypeController;
+use App\Modules\Claims\Controllers\SubclaimTypeController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Claim types: read for all, CRUD for admin only
+    Route::get('/claim-types', [ClaimTypeController::class, 'index']);
+    Route::get('/claim-types/{claimType}/subclaim-types', [ClaimTypeController::class, 'subclaimTypes']);
+    Route::middleware('role:hr_admin|super_admin')->group(function () {
+        Route::post('/claim-types', [ClaimTypeController::class, 'store']);
+        Route::get('/claim-types/{claimType}', [ClaimTypeController::class, 'show']);
+        Route::put('/claim-types/{claimType}', [ClaimTypeController::class, 'update']);
+        Route::delete('/claim-types/{claimType}', [ClaimTypeController::class, 'destroy']);
+        Route::post('/claim-types/{claimType}/subclaim-types', [SubclaimTypeController::class, 'store']);
+        Route::get('/claim-types/{claimType}/subclaim-types/{subclaimType}', [SubclaimTypeController::class, 'show']);
+        Route::put('/claim-types/{claimType}/subclaim-types/{subclaimType}', [SubclaimTypeController::class, 'update']);
+        Route::delete('/claim-types/{claimType}/subclaim-types/{subclaimType}', [SubclaimTypeController::class, 'destroy']);
+    });
+
     // Static routes first (before /claims/{claim})
     Route::get('/claims/stats', [ClaimStatsController::class, 'stats']);
     Route::get('/claims/monthly-spend', [ClaimStatsController::class, 'monthlySpend']);

@@ -30,6 +30,8 @@ class Claim extends Model
         'category_id',
         'title',
         'type',
+        'claim_type_id',
+        'subclaim_type_id',
         'amount',
         'claim_date',
         'description',
@@ -56,6 +58,16 @@ class Claim extends Model
     public function category()
     {
         return $this->belongsTo(ClaimCategory::class, 'category_id');
+    }
+
+    public function claimType()
+    {
+        return $this->belongsTo(ClaimType::class, 'claim_type_id');
+    }
+
+    public function subclaimType()
+    {
+        return $this->belongsTo(SubclaimType::class, 'subclaim_type_id');
     }
 
     public function mileageDetail()

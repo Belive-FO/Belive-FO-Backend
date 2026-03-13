@@ -94,12 +94,15 @@ class ProfileController extends Controller
         $directory = 'face-photos/' . $user->id;
         $extension = $file->extension();
 
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $storage */
+        $storage = Storage::disk($disk);
+
         // Delete previous file for this position if it exists (cleanup orphaned files)
         $oldUrl = $user->$column;
         if ($oldUrl) {
-            $baseUrl = rtrim(Storage::disk($disk)->url(''), '/');
+            $baseUrl = rtrim($storage->url(''), '/');
             $oldPath = $baseUrl !== '' ? str_replace($baseUrl . '/', '', $oldUrl) : $oldUrl;
-            Storage::disk($disk)->delete($oldPath);
+            $storage->delete($oldPath);
         }
 
         // Fixed filename per position → overwrites in place for same extension
@@ -111,7 +114,7 @@ class ProfileController extends Controller
             ]);
         }
 
-        $url = Storage::disk($disk)->url($path);
+        $url = $storage->url($path);
         $user->$column = $url;
         $user->save();
 
@@ -130,6 +133,7 @@ class ProfileController extends Controller
             'userId'       => (string) $user->id,
             'fullName'     => $user->name,
             'email'        => $user->email,
+            'role'         => $user->getRoleNames()->first() ?? 'employee',
             'phone'        => null,
             'department'   => null,
             'employeeId'   => null,

@@ -99,7 +99,9 @@ class LarkAuthController extends Controller
                 ]
             );
 
-            if (! $user->wasRecentlyCreated) {
+            if ($user->wasRecentlyCreated) {
+                $user->assignRole('employee');
+            } else {
                 $user->update([
                     'email' => $larkUser['email'] ?? $user->email,
                     'name' => $larkUser['name'] ?? $user->name,

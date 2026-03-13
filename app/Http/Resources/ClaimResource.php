@@ -13,6 +13,31 @@ class ClaimResource extends JsonResource
             'id' => $this->id,
             'title' => $this->title,
             'type' => $this->type,
+            'claim_type_id' => $this->claim_type_id,
+            'subclaim_type_id' => $this->subclaim_type_id,
+            'claim_type' => $this->when($this->relationLoaded('claimType') && $this->claimType, function () {
+                $ct = $this->claimType;
+                return [
+                    'id' => $ct->id,
+                    'key' => $ct->key,
+                    'label' => $ct->label,
+                    'description' => $ct->description,
+                    'icon' => $ct->icon,
+                    'color' => $ct->color,
+                ];
+            }),
+            'subclaim_type' => $this->when($this->relationLoaded('subclaimType') && $this->subclaimType, function () {
+                $st = $this->subclaimType;
+                return [
+                    'id' => $st->id,
+                    'claim_type_id' => $st->claim_type_id,
+                    'key' => $st->key,
+                    'label' => $st->label,
+                    'description' => $st->description,
+                    'rate' => $st->rate !== null ? (float) $st->rate : null,
+                    'status' => $st->status,
+                ];
+            }),
             'category' => new ClaimCategoryResource($this->whenLoaded('category')),
             'amount' => (string) $this->amount,
             'claim_date' => $this->claim_date?->toDateString(),
