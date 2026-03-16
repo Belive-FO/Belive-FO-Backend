@@ -39,6 +39,11 @@ class StoreClaimRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:1000'],
             'status' => ['nullable', 'string', 'in:draft,pending'],
             'category_id' => ['nullable', 'integer', 'exists:claim_categories,id'],
+            'metadata' => ['nullable', 'array'],
+            'metadata.fields' => ['nullable', 'array'],
+            'metadata.fields.*.label' => ['required_with:metadata.fields', 'string', 'max:100'],
+            'metadata.fields.*.type' => ['required_with:metadata.fields', 'string', 'in:text,number,date,dropdown,mileage,percentage,photo'],
+            'metadata.fields.*.value' => ['nullable'],
         ];
 
         if (in_array($this->input('type'), [Claim::TYPE_MILEAGE, Claim::TYPE_SPECIAL_MILEAGE], true)) {
@@ -62,7 +67,7 @@ class StoreClaimRequest extends FormRequest
         $claim = $this->input('claim');
         if (is_array($claim)) {
             $this->merge($claim);
-            // Normalize camelCase from frontend
+            // Normalize camelCase from frontend (do not map customFields → metadata here; we build metadata.fields below)
             $camelMap = [
                 'claimTypeId' => 'claim_type_id',
                 'subclaimTypeId' => 'subclaim_type_id',
@@ -115,6 +120,23 @@ class StoreClaimRequest extends FormRequest
                         'rate_per_km' => $ratePerKm,
                     ],
                 ]);
+            }
+        }
+
+        // Build metadata for storage from frontend customFields (claim.customFields or claim.metadata.fields)
+        $claim = $this->input('claim');
+        if (is_array($claim)) {
+            $customFields = $claim['customFields'] ?? $claim['custom_fields'] ?? null;
+            if (is_array($customFields)) {
+                $fields = [];
+                foreach ($customFields as $f) {
+                    $fields[] = [
+                        'label' => $f['label'] ?? '',
+                        'type' => $f['type'] ?? 'text',
+                        'value' => $f['value'] ?? null,
+                    ];
+                }
+                $this->merge(['metadata' => ['fields' => $fields]]);
             }
         }
 

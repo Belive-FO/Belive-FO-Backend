@@ -44,6 +44,7 @@ class ClaimResource extends JsonResource
             'status' => $this->status,
             'merchant' => $this->merchant,
             'description' => $this->description,
+            'metadata' => $this->metadata,
             'mileage' => $this->when($this->isMileageType() && $this->relationLoaded('mileageDetail'), function () {
                 $m = $this->mileageDetail;
                 if (! $m) {

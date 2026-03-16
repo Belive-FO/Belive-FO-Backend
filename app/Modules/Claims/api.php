@@ -38,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/claims', [ClaimController::class, 'store']);
     Route::get('/claims/{claim}', [ClaimController::class, 'show']);
     Route::put('/claims/{claim}', [ClaimController::class, 'update']);
+    Route::patch('/claims/{claim}/submit', [ClaimController::class, 'submit']);
     Route::delete('/claims/{claim}', [ClaimController::class, 'destroy']);
 
     // Attachments

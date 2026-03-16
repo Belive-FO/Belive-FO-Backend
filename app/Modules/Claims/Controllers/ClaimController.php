@@ -54,6 +54,18 @@ class ClaimController extends Controller
         return $this->success(new ClaimResource($claim), 'Claim updated.');
     }
 
+    public function submit(Request $request, Claim $claim): JsonResponse
+    {
+        $this->authorize('update', $claim);
+        try {
+            $claim = $this->claimService->submit($claim, $request->user());
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_STATUS', $e->getMessage(), 422);
+        }
+
+        return $this->success(new ClaimResource($claim), 'Claim submitted.');
+    }
+
     public function destroy(Request $request, Claim $claim): JsonResponse
     {
         $this->authorize('delete', $claim);

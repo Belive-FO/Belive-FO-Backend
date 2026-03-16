@@ -41,6 +41,7 @@ class Claim extends Model
         'approved_at',
         'rejected_reason',
         'paid_at',
+        'metadata',
     ];
 
     protected $casts = [
@@ -48,6 +49,7 @@ class Claim extends Model
         'claim_date' => 'date',
         'approved_at' => 'datetime',
         'paid_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     public function user()

@@ -41,6 +41,11 @@ class UpdateClaimRequest extends FormRequest
             'claim_date' => ['sometimes', 'date', 'before_or_equal:today'],
             'merchant' => ['nullable', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'metadata' => ['nullable', 'array'],
+            'metadata.fields' => ['nullable', 'array'],
+            'metadata.fields.*.label' => ['required_with:metadata.fields', 'string', 'max:100'],
+            'metadata.fields.*.type' => ['required_with:metadata.fields', 'string', 'in:text,number,date,dropdown,mileage,percentage,photo'],
+            'metadata.fields.*.value' => ['nullable'],
         ];
 
         $type = $this->input('type', $this->route('claim')?->type);

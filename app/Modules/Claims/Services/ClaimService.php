@@ -54,6 +54,7 @@ class ClaimService
                 'description' => $data['description'] ?? null,
                 'merchant' => $data['merchant'] ?? null,
                 'status' => $status,
+                'metadata' => $data['metadata'] ?? null,
             ]);
 
             if (isset($data['mileage']) && is_array($data['mileage']) && in_array($data['type'], [Claim::TYPE_MILEAGE, Claim::TYPE_SPECIAL_MILEAGE], true)) {
@@ -105,7 +106,8 @@ class ClaimService
                 'claim_date' => $data['claim_date'] ?? $claim->claim_date,
                 'description' => $data['description'] ?? $claim->description,
                 'merchant' => $data['merchant'] ?? $claim->merchant,
-            ], fn ($v) => $v !== null));
+                'metadata' => array_key_exists('metadata', $data) ? $data['metadata'] : $claim->metadata,
+            ], fn ($v, $k) => $k === 'metadata' || $v !== null));
 
             if (isset($data['mileage']) && is_array($data['mileage']) && in_array($claim->type, [Claim::TYPE_MILEAGE, Claim::TYPE_SPECIAL_MILEAGE], true)) {
                 $mileage = $claim->mileageDetail;
@@ -122,6 +124,24 @@ class ClaimService
                     ClaimMileageDetail::create(array_merge($payload, ['claim_id' => $claim->id]));
                 }
             }
+
+            return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
+        });
+    }
+
+    public function submit(Claim $claim, User $user): Claim
+    {
+        if ($claim->status !== Claim::STATUS_DRAFT) {
+            throw new \InvalidArgumentException('Only draft claims can be submitted.');
+        }
+
+        if (! ValidClaimStatusTransition::allowed($claim->status, Claim::STATUS_PENDING)) {
+            throw new \InvalidArgumentException('Claim cannot be submitted from current status.');
+        }
+
+        return DB::transaction(function () use ($claim, $user) {
+            $claim->update(['status' => Claim::STATUS_PENDING]);
+            $this->logStatus($claim->id, Claim::STATUS_DRAFT, Claim::STATUS_PENDING, $user->id);
 
             return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
         });
