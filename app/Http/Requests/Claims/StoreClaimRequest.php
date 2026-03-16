@@ -30,6 +30,7 @@ class StoreClaimRequest extends FormRequest
 
         $rules = [
             'claim_type_id' => ['required', 'integer', 'exists:claim_types,id'],
+            'subclaim_type_id' => ['nullable', 'integer', 'exists:subclaim_types,id'],
             'title' => ['required', 'string', 'max:200'],
             'type' => ['required', 'string', 'in:'.implode(',', $claimTypes)],
             'amount' => ['required', 'numeric', 'min:0.01', new MileageAmountMatchesCalculation],

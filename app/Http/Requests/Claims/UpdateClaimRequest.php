@@ -33,6 +33,8 @@ class UpdateClaimRequest extends FormRequest
         ];
 
         $rules = [
+            'claim_type_id' => ['sometimes', 'integer', 'exists:claim_types,id'],
+            'subclaim_type_id' => ['nullable', 'integer', 'exists:subclaim_types,id'],
             'title' => ['sometimes', 'string', 'max:200'],
             'type' => ['sometimes', 'string', 'in:'.implode(',', $claimTypes)],
             'amount' => ['sometimes', 'numeric', 'min:0.01', new MileageAmountMatchesCalculation],
