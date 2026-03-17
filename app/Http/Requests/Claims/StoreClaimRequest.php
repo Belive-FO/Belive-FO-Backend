@@ -44,6 +44,8 @@ class StoreClaimRequest extends FormRequest
             'metadata.fields.*.label' => ['required_with:metadata.fields', 'string', 'max:100'],
             'metadata.fields.*.type' => ['required_with:metadata.fields', 'string', 'in:text,number,date,dropdown,mileage,percentage,photo'],
             'metadata.fields.*.value' => ['nullable'],
+            'attachments' => ['nullable', 'array'],
+            'attachments.*' => ['file', 'mimes:jpeg,jpg,png,pdf,gif', 'max:10240'],
         ];
 
         if (in_array($this->input('type'), [Claim::TYPE_MILEAGE, Claim::TYPE_SPECIAL_MILEAGE], true)) {
@@ -63,8 +65,15 @@ class StoreClaimRequest extends FormRequest
             $this->merge(['status' => 'draft']);
         }
 
-        // Unwrap nested claim payload (e.g. { claim: { title, claim_type_id, ... } })
+        // Unwrap nested claim payload: object or JSON string (multipart/form-data)
         $claim = $this->input('claim');
+        if (is_string($claim)) {
+            $decoded = json_decode($claim, true);
+            if (is_array($decoded)) {
+                $claim = $decoded;
+                $this->merge($claim);
+            }
+        }
         if (is_array($claim)) {
             $this->merge($claim);
             // Normalize camelCase from frontend (do not map customFields → metadata here; we build metadata.fields below)

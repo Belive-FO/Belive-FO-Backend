@@ -12,10 +12,16 @@ class ClaimAttachmentService
 {
     public function store(Claim $claim, UploadedFile $file): ClaimAttachment
     {
-        $disk = config('filesystems.default');
+        $disk = 'attachment';
         $directory = 'claims/'.$claim->id;
         $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
-        $path = $file->storeAs($directory, $filename, $disk);
+
+        try {
+            $path = $file->storeAs($directory, $filename, $disk);
+        } catch (\Throwable $e) {
+            report($e);
+            throw new \RuntimeException('Failed to store attachment: '.$e->getMessage(), 0, $e);
+        }
 
         if (! $path) {
             throw new \RuntimeException('Failed to store attachment.');

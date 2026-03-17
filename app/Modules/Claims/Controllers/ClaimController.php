@@ -7,6 +7,7 @@ use App\Http\Requests\Claims\StoreClaimRequest;
 use App\Http\Requests\Claims\UpdateClaimRequest;
 use App\Http\Resources\ClaimResource;
 use App\Models\Claim;
+use App\Modules\Claims\Services\ClaimAttachmentService;
 use App\Modules\Claims\Services\ClaimService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,8 @@ class ClaimController extends Controller
     use ApiResponse;
 
     public function __construct(
-        private ClaimService $claimService
+        private ClaimService $claimService,
+        private ClaimAttachmentService $attachmentService
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -35,6 +37,24 @@ class ClaimController extends Controller
     public function store(StoreClaimRequest $request): JsonResponse
     {
         $claim = $this->claimService->store($request->user(), $request->validated());
+
+        // Option A: attachments sent in the same request as claim creation (no draft step)
+        $files = $request->file('attachments');
+        if (! is_array($files)) {
+            $files = $request->hasFile('attachment') ? [$request->file('attachment')] : [];
+        }
+        foreach ($files as $file) {
+            if ($file && $file->isValid()) {
+                try {
+                    $this->attachmentService->store($claim, $file);
+                } catch (\Throwable $e) {
+                    report($e);
+                    return $this->error('ATTACHMENT_STORAGE_FAILED', 'Claim created but failed to store attachment: '.$e->getMessage(), 422);
+                }
+            }
+        }
+
+        $claim->load('attachments');
 
         return $this->success(new ClaimResource($claim), 'Claim created.', 201);
     }
