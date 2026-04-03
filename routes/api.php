@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\LarkAuthController;
 use App\Http\Controllers\GeocodeController;
+use App\Http\Controllers\MapsConfigController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReverseGeocodeController;
 use Illuminate\Support\Facades\Route;
@@ -26,4 +27,5 @@ Route::middleware('auth:sanctum')->group(function () {
     // Geocode (Google Geocoding API, server-side)
     Route::post('/geocode', [GeocodeController::class, 'geocode']);
     Route::post('/reverse-geocode', [ReverseGeocodeController::class, 'reverseGeocode']);
+    Route::get('/maps-config', [MapsConfigController::class, 'index']);
 });

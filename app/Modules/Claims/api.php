@@ -48,7 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Approval (HR/Manager)
     Route::patch('/claims/{claim}/approve', [ClaimApprovalController::class, 'approve'])
         ->middleware('role:manager|hr_admin|super_admin');
-    Route::patch('/claims/{claim}/reject', [ClaimApprovalController::class, 'reject'])
+    Route::post('/claims/{claim}/reject', [ClaimApprovalController::class, 'reject'])
         ->middleware('role:manager|hr_admin|super_admin');
     Route::patch('/claims/{claim}/mark-paid', [ClaimApprovalController::class, 'markPaid'])
         ->middleware('role:hr_admin|super_admin');
