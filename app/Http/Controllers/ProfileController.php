@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use App\Models\User;
 
 class ProfileController extends Controller
 {
@@ -32,13 +32,13 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'full_name'      => ['sometimes', 'string', 'max:255'],
-            'phone'          => ['sometimes', 'nullable', 'string', 'max:50'],
-            'department'     => ['sometimes', 'nullable', 'string', 'max:255'],
-            'employee_id'    => ['sometimes', 'nullable', 'string', 'max:255'],
-            'avatar_url'     => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'full_name' => ['sometimes', 'string', 'max:255'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'department' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'employee_id' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'avatar_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'face_front_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
-            'face_left_url'  => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'face_left_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'face_right_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
         ]);
 
@@ -82,7 +82,7 @@ class ProfileController extends Controller
 
         $data = $request->validate([
             'face_photo' => ['required', 'file', 'image', 'max:5120'], // 5 MB
-            'position'   => ['required', 'string', 'in:front,left,right'],
+            'position' => ['required', 'string', 'in:front,left,right'],
         ]);
 
         /** @var \Illuminate\Http\UploadedFile $file */
@@ -90,8 +90,8 @@ class ProfileController extends Controller
         $position = $data['position'];
         $column = "face_{$position}_url";
 
-        $disk      = config('filesystems.default');
-        $directory = 'face-photos/' . $user->id;
+        $disk = config('filesystems.default');
+        $directory = 'face-photos/'.$user->id;
         $extension = $file->extension();
 
         /** @var \Illuminate\Filesystem\FilesystemAdapter $storage */
@@ -101,7 +101,7 @@ class ProfileController extends Controller
         $oldUrl = $user->$column;
         if ($oldUrl) {
             $baseUrl = rtrim($storage->url(''), '/');
-            $oldPath = $baseUrl !== '' ? str_replace($baseUrl . '/', '', $oldUrl) : $oldUrl;
+            $oldPath = $baseUrl !== '' ? str_replace($baseUrl.'/', '', $oldUrl) : $oldUrl;
             $storage->delete($oldPath);
         }
 
@@ -129,23 +129,23 @@ class ProfileController extends Controller
     private function buildProfile(User $user): array
     {
         return [
-            'id'           => (string) $user->id,
-            'userId'       => (string) $user->id,
-            'fullName'     => $user->name,
-            'email'        => $user->email,
-            'role'         => $user->getRoleNames()->first() ?? 'employee',
-            'phone'        => null,
-            'department'   => null,
-            'employeeId'   => null,
-            'avatarUrl'    => $user->avatar_url ?? null,
+            'id' => (string) $user->id,
+            'userId' => (string) $user->id,
+            'fullName' => $user->name,
+            'email' => $user->email,
+            'role' => $user->getRoleNames()->first() ?? 'staff',
+            'phone' => null,
+            'department' => null,
+            'employeeId' => null,
+            'avatarUrl' => $user->avatar_url ?? null,
             'faceFrontUrl' => $user->face_front_url ?? null,
-            'faceLeftUrl'  => $user->face_left_url ?? null,
+            'faceLeftUrl' => $user->face_left_url ?? null,
             'faceRightUrl' => $user->face_right_url ?? null,
-            'officeId'     => null,
-            'managerId'    => null,
-            'createdAt'    => optional($user->created_at)->toIso8601String(),
-            'updatedAt'    => optional($user->updated_at)->toIso8601String(),
-            'office'       => null,
+            'officeId' => null,
+            'managerId' => null,
+            'createdAt' => optional($user->created_at)->toIso8601String(),
+            'updatedAt' => optional($user->updated_at)->toIso8601String(),
+            'office' => null,
         ];
     }
 }

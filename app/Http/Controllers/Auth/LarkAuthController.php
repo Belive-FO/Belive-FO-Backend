@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\CheckAccountLocked;
+use App\Http\Resources\UserOnboardingResource;
 use App\Models\User;
+use App\Models\UserOnboarding;
+use App\Services\UserOnboardingService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,11 +99,13 @@ class LarkAuthController extends Controller
                     'lark_user_id' => $larkUser['user_id'] ?? null,
                     'avatar_url' => $larkUser['avatar_url'] ?? null,
                     'password' => Hash::make(Str::random(32)),
+                    'status' => 'verifying',
                 ]
             );
 
             if ($user->wasRecentlyCreated) {
-                $user->assignRole('employee');
+                $user->assignRole('staff');
+                UserOnboardingService::createForUser($user->id);
             } else {
                 $user->update([
                     'email' => $larkUser['email'] ?? $user->email,
@@ -108,6 +113,28 @@ class LarkAuthController extends Controller
                     'lark_user_id' => $larkUser['user_id'] ?? $user->lark_user_id,
                     'avatar_url' => $larkUser['avatar_url'] ?? $user->avatar_url,
                 ]);
+
+                if ($user->status === 'rejected') {
+                    try {
+                        UserOnboardingService::handleResubmission($user->fresh());
+                        $user->refresh();
+                    } catch (\Throwable $e) {
+                        Log::warning('Onboarding resubmission on Lark login failed', [
+                            'user_id' => $user->id,
+                            'message' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+
+            $user = $user->fresh()->load('roles');
+
+            if ($user->status === 'deactivated') {
+                return $this->error(
+                    'ACCOUNT_DEACTIVATED',
+                    'This account has been deactivated.',
+                    403
+                );
             }
 
             // 4. Create Bearer token (no session — Sanctum token only)
@@ -117,13 +144,10 @@ class LarkAuthController extends Controller
 
             $token = $user->createToken('belive-fo-lark')->plainTextToken;
 
-            $userForResponse = $user->toArray();
-            $userForResponse['roles'] = $user->getRoleNames()->toArray();
+            $payload = $this->buildAuthPayload($user);
+            $payload['token'] = $token;
 
-            return $this->success([
-                'user' => $userForResponse,
-                'token' => $token,
-            ], 'Login successful.');
+            return $this->success($payload, 'Login successful.');
         } catch (\Exception $e) {
             Log::error('Lark authentication error', [
                 'message' => $e->getMessage(),
@@ -170,6 +194,10 @@ class LarkAuthController extends Controller
             }
         }
 
+        if ($user && $user->status === 'deactivated') {
+            return $this->error('ACCOUNT_DEACTIVATED', 'This account has been deactivated.', 403);
+        }
+
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             if ($user) {
                 CheckAccountLocked::recordFailedAttempt($user->id);
@@ -191,13 +219,10 @@ class LarkAuthController extends Controller
 
         $token = $authenticatedUser->createToken('belive-fo')->plainTextToken;
 
-        $userForResponse = $authenticatedUser->toArray();
-        $userForResponse['roles'] = $authenticatedUser->getRoleNames()->toArray();
+        $payload = $this->buildAuthPayload($authenticatedUser);
+        $payload['token'] = $token;
 
-        return $this->success([
-            'user' => $userForResponse,
-            'token' => $token,
-        ], 'Login successful.');
+        return $this->success($payload, 'Login successful.');
     }
 
     /**
@@ -233,9 +258,65 @@ class LarkAuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user()->load('roles');
+
+        return $this->success($this->buildAuthPayload($user));
+    }
+
+    /**
+     * Re-submit onboarding after rejection (authenticated user).
+     */
+    public function resubmit(Request $request): JsonResponse
+    {
+        try {
+            $onboarding = UserOnboardingService::handleResubmission($request->user());
+
+            return $this->success(
+                ['onboarding' => new UserOnboardingResource($onboarding->load('user'))],
+                'Application resubmitted successfully.'
+            );
+        } catch (\Throwable $e) {
+            return $this->error('RESUBMISSION_FAILED', $e->getMessage(), 400);
+        }
+    }
+
+    /**
+     * @return array{user: array<string, mixed>, accessStatus: string, rejectionReason: ?string, onboarding: mixed}
+     */
+    private function buildAuthPayload(User $user): array
+    {
         $userForResponse = $user->toArray();
         $userForResponse['roles'] = $user->getRoleNames()->toArray();
 
-        return $this->success(['user' => $userForResponse]);
+        $accessStatus = 'granted';
+        $rejectionReason = null;
+        $onboarding = null;
+
+        if ($user->status === 'verifying') {
+            $accessStatus = 'pending';
+            $latest = UserOnboarding::where('user_id', $user->id)
+                ->orderByDesc('created_at')
+                ->first();
+            if ($latest) {
+                $onboarding = (new UserOnboardingResource($latest->loadMissing('user')))->resolve(request());
+            }
+        } elseif ($user->status === 'rejected') {
+            $accessStatus = 'rejected';
+            $latest = UserOnboarding::where('user_id', $user->id)
+                ->orderByDesc('created_at')
+                ->first();
+            $rejectionReason = $latest?->rejection_reason ?? 'Account rejected.';
+            if ($latest) {
+                $onboarding = (new UserOnboardingResource($latest->loadMissing('user')))->resolve(request());
+            }
+        } elseif ($user->status === 'deactivated') {
+            $accessStatus = 'deactivated';
+        }
+
+        return [
+            'user' => $userForResponse,
+            'accessStatus' => $accessStatus,
+            'rejectionReason' => $rejectionReason,
+            'onboarding' => $onboarding,
+        ];
     }
 }

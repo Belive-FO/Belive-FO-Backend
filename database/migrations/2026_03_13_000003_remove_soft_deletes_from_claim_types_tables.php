@@ -1,28 +1,21 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * No-op: claim_types and subclaim_types are created without soft deletes.
+     * This migration previously dropped deleted_at for legacy DBs; fresh installs never had those columns.
+     * Avoids Schema::hasColumn on Supabase pgBouncer (transaction pool) which can abort the migration transaction.
+     */
     public function up(): void
     {
-        Schema::table('claim_types', function (Blueprint $table) {
-            $table->dropSoftDeletes();
-        });
-        Schema::table('subclaim_types', function (Blueprint $table) {
-            $table->dropSoftDeletes();
-        });
+        //
     }
 
     public function down(): void
     {
-        Schema::table('claim_types', function (Blueprint $table) {
-            $table->softDeletes();
-        });
-        Schema::table('subclaim_types', function (Blueprint $table) {
-            $table->softDeletes();
-        });
+        //
     }
 };

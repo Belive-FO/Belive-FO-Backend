@@ -8,7 +8,7 @@ use App\Modules\Claims\Controllers\ClaimTypeController;
 use App\Modules\Claims\Controllers\SubclaimTypeController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked'])->group(function () {
     // Claim types: read for all, CRUD for admin only
     Route::get('/claim-types', [ClaimTypeController::class, 'index']);
     Route::get('/claim-types/{claimType}/subclaim-types', [ClaimTypeController::class, 'subclaimTypes']);
@@ -29,7 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/claims/mileage-rate', [ClaimStatsController::class, 'mileageRate']);
     Route::post('/claims/calculate-distance', [ClaimStatsController::class, 'calculateDistance']);
     Route::get('/claims/all', [ClaimApprovalController::class, 'all'])
-        ->middleware('role:manager|hr_admin|super_admin');
+        ->middleware('role:hod|hr_admin|super_admin');
 
     Route::get('/claim-categories', [ClaimStatsController::class, 'categories']);
 
@@ -47,9 +47,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Approval (HR/Manager)
     Route::patch('/claims/{claim}/approve', [ClaimApprovalController::class, 'approve'])
-        ->middleware('role:manager|hr_admin|super_admin');
+        ->middleware('role:hod|hr_admin|super_admin');
     Route::post('/claims/{claim}/reject', [ClaimApprovalController::class, 'reject'])
-        ->middleware('role:manager|hr_admin|super_admin');
+        ->middleware('role:hod|hr_admin|super_admin');
     Route::patch('/claims/{claim}/mark-paid', [ClaimApprovalController::class, 'markPaid'])
         ->middleware('role:hr_admin|super_admin');
 });

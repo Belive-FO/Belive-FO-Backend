@@ -50,13 +50,13 @@ class RolesAndPermissionsSeeder extends Seeder
         }
 
         // Create roles (sanctum guard for API)
-        $employee = Role::firstOrCreate(['name' => 'employee', 'guard_name' => $guardName]);
-        $manager = Role::firstOrCreate(['name' => 'manager', 'guard_name' => $guardName]);
+        $staff = Role::firstOrCreate(['name' => 'staff', 'guard_name' => $guardName]);
+        $hod = Role::firstOrCreate(['name' => 'hod', 'guard_name' => $guardName]);
         $hrAdmin = Role::firstOrCreate(['name' => 'hr_admin', 'guard_name' => $guardName]);
         $superAdmin = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => $guardName]);
 
         // Assign permissions to roles (same guard)
-        $employee->givePermissionTo([
+        $staff->givePermissionTo([
             'attendance.view-own',
             'attendance.create',
             'leave.view-own',
@@ -65,7 +65,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'claims.create',
         ]);
 
-        $manager->givePermissionTo([
+        $hod->givePermissionTo([
             'attendance.view-own',
             'attendance.view-team',
             'attendance.create',
@@ -106,11 +106,13 @@ class RolesAndPermissionsSeeder extends Seeder
         $user = User::firstOrCreate(
             ['email' => 'superadmin@example.com'],
             [
-                'name'     => 'Super Admin',
+                'name' => 'Super Admin',
                 'password' => Hash::make('password'),
+                'status' => 'active',
             ]
         );
         $user->syncRoles($superAdmin);
+        $user->forceFill(['status' => 'active'])->save();
 
         // Ensure users who have web guard roles also have the same roles for sanctum (API)
         $sanctumRolesByName = Role::where('guard_name', $guardName)->get()->keyBy('name');

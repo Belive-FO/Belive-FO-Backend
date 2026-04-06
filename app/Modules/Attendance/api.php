@@ -7,7 +7,7 @@ use App\Modules\Attendance\Controllers\FaceVerificationController;
 use App\Modules\Attendance\Controllers\OfficeController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked'])->group(function () {
     // Office list — all authenticated users can select an active working location.
     Route::get('/offices', [OfficeController::class, 'index']);
 
