@@ -62,6 +62,7 @@ class ProfileController extends Controller
 
         // phone, department, employeeId are not persisted in the users table yet.
         $user->save();
+        $user->refresh();
 
         return response()->json([
             'data' => $this->buildProfile($user),
@@ -128,6 +129,8 @@ class ProfileController extends Controller
      */
     private function buildProfile(User $user): array
     {
+        $user->loadMissing('department');
+
         return [
             'id' => (string) $user->id,
             'userId' => (string) $user->id,
@@ -135,7 +138,7 @@ class ProfileController extends Controller
             'email' => $user->email,
             'role' => $user->getRoleNames()->first() ?? 'staff',
             'phone' => null,
-            'department' => null,
+            'department' => $this->departmentDisplayString($user),
             'employeeId' => null,
             'avatarUrl' => $user->avatar_url ?? null,
             'faceFrontUrl' => $user->face_front_url ?? null,
@@ -147,5 +150,22 @@ class ProfileController extends Controller
             'updatedAt' => optional($user->updated_at)->toIso8601String(),
             'office' => null,
         ];
+    }
+
+    /**
+     * Human-readable department for profile (aligns with User Management: "Name (CODE)" when short_code set).
+     */
+    private function departmentDisplayString(User $user): ?string
+    {
+        $dept = $user->department;
+        if ($dept === null) {
+            return null;
+        }
+
+        if (filled($dept->short_code)) {
+            return $dept->name.' ('.$dept->short_code.')';
+        }
+
+        return $dept->name;
     }
 }

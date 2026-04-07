@@ -8,6 +8,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -117,6 +118,12 @@ return Application::configure(basePath: dirname(__DIR__))
                         'status' => 423,
                     ], 423);
                 }
+
+                Log::error('Database query failed', [
+                    'message' => $e->getMessage(),
+                    'sql' => $e->getSql(),
+                    'bindings' => $e->getBindings(),
+                ]);
 
                 return response()->json([
                     'error' => 'DATABASE_ERROR',

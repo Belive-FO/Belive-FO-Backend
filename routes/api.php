@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Auth\LarkAuthController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\GeocodeController;
@@ -36,13 +37,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/reverse-geocode', [ReverseGeocodeController::class, 'reverseGeocode']);
         Route::get('/maps-config', [MapsConfigController::class, 'index']);
 
-        // Departments (super admin)
-        Route::middleware('check.super_admin')->group(function () {
+        // User Management directory (super_admin, hr_admin: all users; hod: same department only)
+        Route::middleware(['role:super_admin|hr_admin|hod', 'throttle:60,1'])->group(function () {
+            Route::get('/admin/users', [AdminUserController::class, 'index']);
+            Route::get('/admin/users/{user:uuid}', [AdminUserController::class, 'show']);
+        });
+
+        Route::middleware(['check.super_admin', 'throttle:60,1'])->group(function () {
+            Route::patch('/admin/users/{user:uuid}', [AdminUserController::class, 'updateDepartment']);
+        });
+
+        // Departments: read super_admin|hr_admin|hod; create/update (incl. status) super_admin only — no delete
+        Route::middleware(['role:super_admin|hr_admin|hod', 'throttle:60,1'])->group(function () {
             Route::get('/departments', [DepartmentController::class, 'index']);
-            Route::post('/departments', [DepartmentController::class, 'store']);
             Route::get('/departments/{department}', [DepartmentController::class, 'show']);
+        });
+        Route::middleware(['check.super_admin', 'throttle:60,1'])->group(function () {
+            Route::post('/departments', [DepartmentController::class, 'store']);
             Route::put('/departments/{department}', [DepartmentController::class, 'update']);
-            Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
+            Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         });
 
         // Onboarding (super admin only)

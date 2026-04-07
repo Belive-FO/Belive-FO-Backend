@@ -23,9 +23,11 @@ Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked
     Route::post('/attendance/upload-photo', [AttendanceController::class, 'uploadPhoto']);
     Route::post('/attendance/logs', [AttendanceController::class, 'store']);
 
-    // Admin analytics + staff data
-    Route::get('/admin/attendance/today', [AdminAttendanceController::class, 'today']);
-    Route::get('/admin/profiles', [AdminProfileController::class, 'index']);
+    // Admin analytics + staff data (super_admin, hr_admin, hod — HOD scope applied in controller for profiles)
+    Route::middleware('role:super_admin|hr_admin|hod')->group(function () {
+        Route::get('/admin/attendance/today', [AdminAttendanceController::class, 'today']);
+        Route::get('/admin/profiles', [AdminProfileController::class, 'index']);
+    });
 
     // Face verification
     Route::post('/face/verify', [FaceVerificationController::class, 'verify']);

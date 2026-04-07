@@ -9,7 +9,9 @@ class UpdateDepartmentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $department = $this->route('department');
+
+        return $department && ($this->user()?->can('update', $department) ?? false);
     }
 
     /**

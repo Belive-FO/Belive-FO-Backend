@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -58,6 +59,35 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (User $user): void {
+            if (empty($user->uuid)) {
+                $user->uuid = (string) Str::uuid();
+            }
+        });
+    }
+
+    /**
+     * Reject malformed UUID strings before querying PostgreSQL (avoids 500 on invalid input syntax).
+     *
+     * @param  mixed  $value
+     * @param  string|null  $field
+     * @return static|null
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $field = $field ?? $this->getRouteKeyName();
+
+        if ($field === 'uuid') {
+            if (! is_string($value) || ! Str::isUuid($value)) {
+                return null;
+            }
+        }
+
+        return parent::resolveRouteBinding($value, $field);
     }
 
     /**

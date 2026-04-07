@@ -6,22 +6,28 @@ use App\Http\Requests\Department\StoreDepartmentRequest;
 use App\Http\Requests\Department\UpdateDepartmentRequest;
 use App\Http\Resources\DepartmentResource;
 use App\Models\Department;
-use App\Models\User;
-use App\Models\UserOnboarding;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class DepartmentController extends Controller
 {
     use ApiResponse;
 
-    public function index(): JsonResponse
+    /**
+     * List departments. Super admin sees all (incl. inactive). HR admin and HOD see active only.
+     */
+    public function index(Request $request): JsonResponse
     {
-        $departments = Department::query()
-            ->active()
-            ->orderBy('name')
-            ->get();
+        $this->authorize('viewAny', Department::class);
+
+        $query = Department::query()->orderBy('name');
+        if (! $request->user()->hasRole('super_admin')) {
+            $query->active();
+        }
+
+        $departments = $query->get();
 
         return $this->success(
             DepartmentResource::collection($departments),
@@ -31,6 +37,8 @@ class DepartmentController extends Controller
 
     public function store(StoreDepartmentRequest $request): JsonResponse
     {
+        $this->authorize('create', Department::class);
+
         $department = Department::create($request->validated());
 
         activity('department')
@@ -57,14 +65,21 @@ class DepartmentController extends Controller
 
     public function show(Department $department): JsonResponse
     {
+        $this->authorize('view', $department);
+
         return $this->success(
             new DepartmentResource($department),
             'Department retrieved successfully.'
         );
     }
 
+    /**
+     * Update department (super admin). Activate/deactivate via body: { "status": true|false } (Option A).
+     */
     public function update(UpdateDepartmentRequest $request, Department $department): JsonResponse
     {
+        $this->authorize('update', $department);
+
         $oldValues = [
             'name' => $department->name,
             'short_code' => $department->short_code,
@@ -90,42 +105,5 @@ class DepartmentController extends Controller
             new DepartmentResource($department->fresh()),
             'Department updated successfully.'
         );
-    }
-
-    public function destroy(Department $department): JsonResponse
-    {
-        $inUseByUser = User::query()->where('department_id', $department->id)->exists();
-        $inUseByOnboarding = UserOnboarding::query()->where('department_id', $department->id)->exists();
-
-        if ($inUseByUser || $inUseByOnboarding) {
-            return $this->error(
-                'DEPARTMENT_IN_USE',
-                'Department cannot be deleted because it is assigned to users or onboarding records.',
-                409
-            );
-        }
-
-        $departmentData = [
-            'id' => $department->id,
-            'name' => $department->name,
-            'short_code' => $department->short_code,
-            'color_scheme' => $department->color_scheme,
-            'status' => $department->status,
-        ];
-        $departmentName = $department->name;
-
-        activity('department')
-            ->event('deleted')
-            ->causedBy(Auth::user())
-            ->withProperties([
-                'old' => $departmentData,
-                'module' => 'department',
-                'ip' => request()->ip(),
-            ])
-            ->log("Department deleted: {$departmentName}");
-
-        $department->delete();
-
-        return $this->success(null, 'Department deleted successfully.');
     }
 }
