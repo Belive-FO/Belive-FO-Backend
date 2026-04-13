@@ -41,7 +41,7 @@ class AdminUserManagementResource extends JsonResource
     }
 
     /**
-     * Single display role: lowest rank among sanctum roles (super_admin first).
+     * Single display role: lowest rank among sanctum roles (top_management first).
      */
     private function primarySanctumRoleName(): ?string
     {

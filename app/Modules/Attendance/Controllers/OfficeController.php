@@ -14,7 +14,7 @@ class OfficeController extends Controller
     {
         $query = Office::query();
 
-        $canViewInactive = $request->user()?->hasAnyRole(['super_admin', 'hr_admin']) === true;
+        $canViewInactive = $request->user()?->hasAnyRole(['top_management', 'hr_admin']) === true;
 
         if ($request->filled('is_active') && $canViewInactive) {
             $isActive = filter_var($request->query('is_active'), FILTER_VALIDATE_BOOLEAN);

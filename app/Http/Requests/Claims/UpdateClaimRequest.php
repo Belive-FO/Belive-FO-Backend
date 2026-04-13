@@ -2,12 +2,16 @@
 
 namespace App\Http\Requests\Claims;
 
+use App\Http\Requests\Claims\Concerns\SyncsClaimTypeFromCatalog;
 use App\Models\Claim;
 use App\Modules\Claims\Rules\MileageAmountMatchesCalculation;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateClaimRequest extends FormRequest
 {
+    use SyncsClaimTypeFromCatalog;
+
     public function authorize(): bool
     {
         $claim = $this->route('claim');
@@ -36,7 +40,7 @@ class UpdateClaimRequest extends FormRequest
             'claim_type_id' => ['sometimes', 'integer', 'exists:claim_types,id'],
             'subclaim_type_id' => ['nullable', 'integer', 'exists:subclaim_types,id'],
             'title' => ['sometimes', 'string', 'max:200'],
-            'type' => ['sometimes', 'string', 'in:'.implode(',', $claimTypes)],
+            'type' => ['sometimes', 'string', Rule::in($claimTypes)],
             'amount' => ['sometimes', 'numeric', 'min:0.01', new MileageAmountMatchesCalculation],
             'claim_date' => ['sometimes', 'date', 'before_or_equal:today'],
             'merchant' => ['nullable', 'string', 'max:150'],
@@ -58,5 +62,32 @@ class UpdateClaimRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $claim = $this->input('claim');
+        if (is_string($claim)) {
+            $decoded = json_decode($claim, true);
+            if (is_array($decoded)) {
+                $claim = $decoded;
+                $this->merge($claim);
+            }
+        }
+        if (is_array($claim)) {
+            $this->merge($claim);
+            $camelMap = [
+                'claimTypeId' => 'claim_type_id',
+                'subclaimTypeId' => 'subclaim_type_id',
+                'claimDate' => 'claim_date',
+            ];
+            foreach ($camelMap as $camel => $snake) {
+                if (array_key_exists($camel, $claim) && ! array_key_exists($snake, $claim)) {
+                    $this->merge([$snake => $claim[$camel]]);
+                }
+            }
+        }
+
+        $this->syncClaimTypeKeyFromCatalog();
     }
 }

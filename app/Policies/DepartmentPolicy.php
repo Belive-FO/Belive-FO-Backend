@@ -9,21 +9,21 @@ class DepartmentPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['super_admin', 'hr_admin', 'hod']);
+        return $user->hasAnyRole(['top_management', 'hr_admin', 'hod']);
     }
 
     public function view(User $user, Department $department): bool
     {
-        return $user->hasAnyRole(['super_admin', 'hr_admin', 'hod']);
+        return $user->hasAnyRole(['top_management', 'hr_admin', 'hod']);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('super_admin');
+        return $user->hasRole('top_management');
     }
 
     public function update(User $user, Department $department): bool
     {
-        return $user->hasRole('super_admin');
+        return $user->hasRole('top_management');
     }
 }

@@ -10,18 +10,40 @@ use Illuminate\Support\Facades\DB;
 class AdminUserDirectoryService
 {
     public const ROLE_RANK = [
-        'super_admin' => 0,
+        'top_management' => 0,
         'hr_admin' => 1,
         'hod' => 2,
         'staff' => 3,
     ];
 
     /**
-     * Super admin and HR admin see all users; HOD sees only their department.
+     * Roles Top Management may assign in User Management (Spatie name, sanctum guard).
+     *
+     * @return list<string>
+     */
+    public static function assignableDirectoryRoleNames(): array
+    {
+        return array_keys(self::ROLE_RANK);
+    }
+
+    /**
+     * Count users holding the top_management role (sanctum guard).
+     */
+    public static function topManagementUserCount(): int
+    {
+        return User::query()
+            ->whereHas('roles', function (Builder $q): void {
+                $q->where('name', 'top_management')->where('guard_name', 'sanctum');
+            })
+            ->count();
+    }
+
+    /**
+     * Top Management and HR admin see all users; HOD sees only their department.
      */
     public static function hasFullDirectoryAccess(User $actor): bool
     {
-        return $actor->hasRole('super_admin') || $actor->hasRole('hr_admin');
+        return $actor->hasRole('top_management') || $actor->hasRole('hr_admin');
     }
 
     /**
@@ -127,7 +149,7 @@ class AdminUserDirectoryService
         $guard = 'sanctum';
 
         $sub = '(SELECT MIN(CASE r.name '
-            ."WHEN 'super_admin' THEN 0 "
+            ."WHEN 'top_management' THEN 0 "
             ."WHEN 'hr_admin' THEN 1 "
             ."WHEN 'hod' THEN 2 "
             ."WHEN 'staff' THEN 3 "

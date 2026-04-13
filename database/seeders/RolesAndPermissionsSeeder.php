@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -53,7 +54,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $staff = Role::firstOrCreate(['name' => 'staff', 'guard_name' => $guardName]);
         $hod = Role::firstOrCreate(['name' => 'hod', 'guard_name' => $guardName]);
         $hrAdmin = Role::firstOrCreate(['name' => 'hr_admin', 'guard_name' => $guardName]);
-        $superAdmin = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => $guardName]);
+        $topManagement = Role::firstOrCreate(['name' => 'top_management', 'guard_name' => $guardName]);
 
         // Assign permissions to roles (same guard)
         $staff->givePermissionTo([
@@ -98,21 +99,56 @@ class RolesAndPermissionsSeeder extends Seeder
             'claims.reject',
         ]);
 
-        $superAdmin->givePermissionTo(
+        $topManagement->givePermissionTo(
             Permission::where('guard_name', $guardName)->pluck('name')->toArray()
         );
 
-        // Create superadmin user
+        // Top Management demo user (uuid set explicitly: DatabaseSeeder uses WithoutModelEvents,
+        // so User::creating does not run and Postgres NOT NULL on users.uuid would fail).
         $user = User::firstOrCreate(
             ['email' => 'superadmin@example.com'],
             [
-                'name' => 'Super Admin',
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Top Management',
                 'password' => Hash::make('password'),
                 'status' => 'active',
             ]
         );
-        $user->syncRoles($superAdmin);
+        if (empty($user->uuid)) {
+            $user->forceFill(['uuid' => (string) Str::uuid()])->save();
+        }
+        $user->syncRoles($topManagement);
         $user->forceFill(['status' => 'active'])->save();
+
+        $hrUser = User::firstOrCreate(
+            ['email' => 'hr@gmail.com'],
+            [
+                'uuid' => (string) Str::uuid(),
+                'name' => 'HR',
+                'password' => Hash::make('password'),
+                'status' => 'active',
+            ]
+        );
+        if (empty($hrUser->uuid)) {
+            $hrUser->forceFill(['uuid' => (string) Str::uuid()])->save();
+        }
+        $hrUser->syncRoles($hrAdmin);
+        $hrUser->forceFill(['status' => 'active'])->save();
+
+        $hodUser = User::firstOrCreate(
+            ['email' => 'hod@gmail.com'],
+            [
+                'uuid' => (string) Str::uuid(),
+                'name' => 'HOD',
+                'password' => Hash::make('password'),
+                'status' => 'active',
+            ]
+        );
+        if (empty($hodUser->uuid)) {
+            $hodUser->forceFill(['uuid' => (string) Str::uuid()])->save();
+        }
+        $hodUser->syncRoles($hod);
+        $hodUser->forceFill(['status' => 'active'])->save();
 
         // Ensure users who have web guard roles also have the same roles for sanctum (API)
         $sanctumRolesByName = Role::where('guard_name', $guardName)->get()->keyBy('name');

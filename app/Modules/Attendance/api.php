@@ -12,7 +12,7 @@ Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked
     Route::get('/offices', [OfficeController::class, 'index']);
 
     // Office management — restricted to elevated roles.
-    Route::middleware('role:super_admin|hr_admin')->group(function () {
+    Route::middleware('role:top_management|hr_admin')->group(function () {
         Route::post('/offices', [OfficeController::class, 'store']);
         Route::put('/offices/{office}', [OfficeController::class, 'update']);
         Route::patch('/offices/{office}', [OfficeController::class, 'toggleActive']);
@@ -23,8 +23,8 @@ Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked
     Route::post('/attendance/upload-photo', [AttendanceController::class, 'uploadPhoto']);
     Route::post('/attendance/logs', [AttendanceController::class, 'store']);
 
-    // Admin analytics + staff data (super_admin, hr_admin, hod — HOD scope applied in controller for profiles)
-    Route::middleware('role:super_admin|hr_admin|hod')->group(function () {
+    // Admin analytics + staff data (top_management, hr_admin, hod — HOD scope applied in controller for profiles)
+    Route::middleware('role:top_management|hr_admin|hod')->group(function () {
         Route::get('/admin/attendance/today', [AdminAttendanceController::class, 'today']);
         Route::get('/admin/profiles', [AdminProfileController::class, 'index']);
     });

@@ -49,7 +49,7 @@ class OnboardingController extends Controller
     }
 
     /**
-     * List onboarding records (super admin). Optional filter: ?filter[status]=pending
+     * List onboarding records (Top Management). Optional filter: ?filter[status]=pending
      */
     public function index(Request $request): JsonResponse
     {

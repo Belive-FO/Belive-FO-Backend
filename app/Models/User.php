@@ -28,6 +28,7 @@ class User extends Authenticatable
         'password',
         'lark_user_id',
         'lark_open_id',
+        'employee_id',
         'avatar_url',
         'face_front_url',
         'face_left_url',

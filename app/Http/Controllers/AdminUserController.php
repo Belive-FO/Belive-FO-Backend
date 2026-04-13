@@ -17,7 +17,7 @@ class AdminUserController extends Controller
     use ApiResponse;
 
     /**
-     * Paginated user directory for User Management (super_admin, hr_admin: all; hod: own department).
+     * Paginated user directory for User Management (top_management, hr_admin: all; hod: own department).
      */
     public function index(Request $request): JsonResponse
     {
@@ -67,7 +67,7 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Update a user's department (super_admin only). Accepts department_id or departmentId; null clears assignment.
+     * Update a user's department (Top Management only). Accepts department_id or departmentId; null clears assignment.
      */
     public function updateDepartment(Request $request, User $user): JsonResponse
     {
@@ -91,6 +91,47 @@ class AdminUserController extends Controller
         return $this->success(
             AdminUserManagementResource::make($user)->resolve(),
             'User department updated successfully.'
+        );
+    }
+
+    /**
+     * Update a user's directory role (Top Management only). Body: { "role": "staff"|"hr_admin"|"hod"|"top_management" }.
+     * Cannot demote the last Top Management user.
+     */
+    public function updateRole(Request $request, User $user): JsonResponse
+    {
+        $actor = $request->user();
+
+        if (! AdminUserDirectoryService::actorCanViewTargetUser($actor, $user)) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'role' => ['required', 'string', Rule::in(AdminUserDirectoryService::assignableDirectoryRoleNames())],
+        ]);
+
+        $newRole = $validated['role'];
+
+        $user->loadMissing('roles');
+
+        $isTargetTopManagement = $user->roles->contains(
+            fn ($role) => $role->name === 'top_management' && $role->guard_name === 'sanctum'
+        );
+
+        if ($isTargetTopManagement && $newRole !== 'top_management') {
+            if (AdminUserDirectoryService::topManagementUserCount() <= 1) {
+                throw ValidationException::withMessages([
+                    'role' => ['Cannot remove the last Top Management user.'],
+                ]);
+            }
+        }
+
+        $user->syncRoles([$newRole]);
+        $user->load(['roles', 'department']);
+
+        return $this->success(
+            AdminUserManagementResource::make($user)->resolve(),
+            'User role updated successfully.'
         );
     }
 

@@ -12,7 +12,7 @@ Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked
     // Claim types: read for all, CRUD for admin only
     Route::get('/claim-types', [ClaimTypeController::class, 'index']);
     Route::get('/claim-types/{claimType}/subclaim-types', [ClaimTypeController::class, 'subclaimTypes']);
-    Route::middleware('role:hr_admin|super_admin')->group(function () {
+    Route::middleware('role:hr_admin|top_management')->group(function () {
         Route::post('/claim-types', [ClaimTypeController::class, 'store']);
         Route::get('/claim-types/{claimType}', [ClaimTypeController::class, 'show']);
         Route::put('/claim-types/{claimType}', [ClaimTypeController::class, 'update']);
@@ -29,7 +29,7 @@ Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked
     Route::get('/claims/mileage-rate', [ClaimStatsController::class, 'mileageRate']);
     Route::post('/claims/calculate-distance', [ClaimStatsController::class, 'calculateDistance']);
     Route::get('/claims/all', [ClaimApprovalController::class, 'all'])
-        ->middleware('role:hod|hr_admin|super_admin');
+        ->middleware('role:hod|hr_admin|top_management');
 
     Route::get('/claim-categories', [ClaimStatsController::class, 'categories']);
 
@@ -47,9 +47,9 @@ Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked
 
     // Approval (HR/Manager)
     Route::patch('/claims/{claim}/approve', [ClaimApprovalController::class, 'approve'])
-        ->middleware('role:hod|hr_admin|super_admin');
+        ->middleware('role:hod|hr_admin|top_management');
     Route::post('/claims/{claim}/reject', [ClaimApprovalController::class, 'reject'])
-        ->middleware('role:hod|hr_admin|super_admin');
+        ->middleware('role:hod|hr_admin|top_management');
     Route::patch('/claims/{claim}/mark-paid', [ClaimApprovalController::class, 'markPaid'])
-        ->middleware('role:hr_admin|super_admin');
+        ->middleware('role:hr_admin|top_management');
 });

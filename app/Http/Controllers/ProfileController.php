@@ -60,7 +60,11 @@ class ProfileController extends Controller
             $user->face_right_url = $data['face_right_url'];
         }
 
-        // phone, department, employeeId are not persisted in the users table yet.
+        if (array_key_exists('employee_id', $data)) {
+            $user->employee_id = $data['employee_id'];
+        }
+
+        // phone, department are not persisted in the users table yet.
         $user->save();
         $user->refresh();
 
@@ -139,7 +143,8 @@ class ProfileController extends Controller
             'role' => $user->getRoleNames()->first() ?? 'staff',
             'phone' => null,
             'department' => $this->departmentDisplayString($user),
-            'employeeId' => null,
+            // snake_case: BFF/client may map to employeeId (e.g. keysToCamel). Prefer HR sync; else Lark open_id (ou_*).
+            'employee_id' => $this->resolveEmployeeId($user),
             'avatarUrl' => $user->avatar_url ?? null,
             'faceFrontUrl' => $user->face_front_url ?? null,
             'faceLeftUrl' => $user->face_left_url ?? null,
@@ -150,6 +155,18 @@ class ProfileController extends Controller
             'updatedAt' => optional($user->updated_at)->toIso8601String(),
             'office' => null,
         ];
+    }
+
+    /**
+     * Employee / directory identifier for display (HRIS sync or Lark open_id fallback).
+     */
+    private function resolveEmployeeId(User $user): ?string
+    {
+        if (filled($user->employee_id)) {
+            return $user->employee_id;
+        }
+
+        return $user->lark_open_id;
     }
 
     /**

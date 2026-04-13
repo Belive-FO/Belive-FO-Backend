@@ -16,14 +16,14 @@ class DepartmentController extends Controller
     use ApiResponse;
 
     /**
-     * List departments. Super admin sees all (incl. inactive). HR admin and HOD see active only.
+     * List departments. Top Management sees all (incl. inactive). HR admin and HOD see active only.
      */
     public function index(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Department::class);
 
         $query = Department::query()->orderBy('name');
-        if (! $request->user()->hasRole('super_admin')) {
+        if (! $request->user()->hasRole('top_management')) {
             $query->active();
         }
 
@@ -74,7 +74,7 @@ class DepartmentController extends Controller
     }
 
     /**
-     * Update department (super admin). Activate/deactivate via body: { "status": true|false } (Option A).
+     * Update department (Top Management). Activate/deactivate via body: { "status": true|false } (Option A).
      */
     public function update(UpdateDepartmentRequest $request, Department $department): JsonResponse
     {

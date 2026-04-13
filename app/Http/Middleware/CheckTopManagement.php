@@ -6,10 +6,10 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class CheckSuperAdmin
+class CheckTopManagement
 {
     /**
-     * Only users with the super_admin role may proceed (Spatie Permission).
+     * Only users with the top_management role may proceed (Spatie Permission).
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
@@ -23,13 +23,13 @@ class CheckSuperAdmin
             ], 401);
         }
 
-        if ($request->user()->hasRole('super_admin')) {
+        if ($request->user()->hasRole('top_management')) {
             return $next($request);
         }
 
         return response()->json([
             'error' => 'FORBIDDEN',
-            'message' => 'Only super administrators can access this resource.',
+            'message' => 'Only Top Management can access this resource.',
             'status' => 403,
         ], 403);
     }

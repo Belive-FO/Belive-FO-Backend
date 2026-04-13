@@ -11,14 +11,24 @@ class DepartmentSeeder extends Seeder
     {
         $now = now();
         $departments = [
-            ['name' => 'Human Resources', 'short_code' => 'HR1', 'color_scheme' => 'cyan', 'status' => true, 'created_at' => $now, 'updated_at' => $now],
-            ['name' => 'Operations', 'short_code' => 'OPS1', 'color_scheme' => 'emerald', 'status' => true, 'created_at' => $now, 'updated_at' => $now],
-            ['name' => 'Finance', 'short_code' => 'FIN1', 'color_scheme' => 'slate', 'status' => true, 'created_at' => $now, 'updated_at' => $now],
-            ['name' => 'General', 'short_code' => 'GEN1', 'color_scheme' => 'violet', 'status' => true, 'created_at' => $now, 'updated_at' => $now],
+            ['name' => 'Human Resource', 'short_code' => 'HR'],
+            ['name' => 'Marketing', 'short_code' => 'Mar'],
+            ['name' => 'Software & IT', 'short_code' => 'IT'],
+            ['name' => 'Finance & Account', 'short_code' => 'FA'],
+            ['name' => 'Indoor Sales', 'short_code' => 'IS'],
+            ['name' => 'Outdoor Sales', 'short_code' => 'OS'],
+            ['name' => 'Customer Service', 'short_code' => 'CS'],
+            ['name' => 'Business Development', 'short_code' => 'BD'],
         ];
 
         foreach ($departments as $row) {
-            DB::table('departments')->insertOrIgnore($row);
+            DB::table('departments')->insertOrIgnore([
+                'name' => $row['name'],
+                'short_code' => $row['short_code'],
+                'status' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
         }
     }
 }

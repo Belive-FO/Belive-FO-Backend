@@ -37,29 +37,30 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/reverse-geocode', [ReverseGeocodeController::class, 'reverseGeocode']);
         Route::get('/maps-config', [MapsConfigController::class, 'index']);
 
-        // User Management directory (super_admin, hr_admin: all users; hod: same department only)
-        Route::middleware(['role:super_admin|hr_admin|hod', 'throttle:60,1'])->group(function () {
+        // User Management directory (top_management, hr_admin: all users; hod: same department only)
+        Route::middleware(['role:top_management|hr_admin|hod', 'throttle:60,1'])->group(function () {
             Route::get('/admin/users', [AdminUserController::class, 'index']);
             Route::get('/admin/users/{user:uuid}', [AdminUserController::class, 'show']);
         });
 
-        Route::middleware(['check.super_admin', 'throttle:60,1'])->group(function () {
+        Route::middleware(['check.top_management', 'throttle:60,1'])->group(function () {
             Route::patch('/admin/users/{user:uuid}', [AdminUserController::class, 'updateDepartment']);
+            Route::patch('/admin/users/{user:uuid}/role', [AdminUserController::class, 'updateRole']);
         });
 
-        // Departments: read super_admin|hr_admin|hod; create/update (incl. status) super_admin only — no delete
-        Route::middleware(['role:super_admin|hr_admin|hod', 'throttle:60,1'])->group(function () {
+        // Departments: read top_management|hr_admin|hod; create/update (incl. status) top_management only — no delete
+        Route::middleware(['role:top_management|hr_admin|hod', 'throttle:60,1'])->group(function () {
             Route::get('/departments', [DepartmentController::class, 'index']);
             Route::get('/departments/{department}', [DepartmentController::class, 'show']);
         });
-        Route::middleware(['check.super_admin', 'throttle:60,1'])->group(function () {
+        Route::middleware(['check.top_management', 'throttle:60,1'])->group(function () {
             Route::post('/departments', [DepartmentController::class, 'store']);
             Route::put('/departments/{department}', [DepartmentController::class, 'update']);
             Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         });
 
-        // Onboarding (super admin only)
-        Route::middleware('check.super_admin')->group(function () {
+        // Onboarding (Top Management only)
+        Route::middleware('check.top_management')->group(function () {
             Route::get('/onboarding/approval-roles', [OnboardingController::class, 'approvalRoles']);
             Route::get('/onboarding', [OnboardingController::class, 'index']);
             Route::post('/onboarding/{userOnboarding}/approval', [OnboardingController::class, 'approval']);

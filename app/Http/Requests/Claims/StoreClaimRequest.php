@@ -2,13 +2,16 @@
 
 namespace App\Http\Requests\Claims;
 
+use App\Http\Requests\Claims\Concerns\SyncsClaimTypeFromCatalog;
 use App\Models\Claim;
-use App\Models\ClaimType;
 use App\Modules\Claims\Rules\MileageAmountMatchesCalculation;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreClaimRequest extends FormRequest
 {
+    use SyncsClaimTypeFromCatalog;
+
     public function authorize(): bool
     {
         return $this->user()?->can('create', Claim::class) ?? false;
@@ -32,7 +35,7 @@ class StoreClaimRequest extends FormRequest
             'claim_type_id' => ['required', 'integer', 'exists:claim_types,id'],
             'subclaim_type_id' => ['nullable', 'integer', 'exists:subclaim_types,id'],
             'title' => ['required', 'string', 'max:200'],
-            'type' => ['required', 'string', 'in:'.implode(',', $claimTypes)],
+            'type' => ['required', 'string', Rule::in($claimTypes)],
             'amount' => ['required', 'numeric', 'min:0.01', new MileageAmountMatchesCalculation],
             'claim_date' => ['required', 'date', 'before_or_equal:today'],
             'merchant' => ['nullable', 'string', 'max:150'],
@@ -89,14 +92,7 @@ class StoreClaimRequest extends FormRequest
             }
         }
 
-        // Resolve claim_type_id to type (ClaimType.key) for storage
-        $claimTypeId = $this->input('claim_type_id');
-        if ($claimTypeId !== null && $this->missing('type')) {
-            $claimType = ClaimType::find($claimTypeId);
-            if ($claimType) {
-                $this->merge(['type' => $claimType->key]);
-            }
-        }
+        $this->syncClaimTypeKeyFromCatalog();
 
         // Map frontend mileage structure to backend expected format (mileage.from_location, mileage.distance_km, etc.)
         $type = $this->input('type');
@@ -162,5 +158,8 @@ class StoreClaimRequest extends FormRequest
         if ($this->missing('claim_date')) {
             $this->merge(['claim_date' => now()->toDateString()]);
         }
+
+        // Run again last so nothing above can leave a UI-only `type` (e.g. "Business Claim") on the request.
+        $this->syncClaimTypeKeyFromCatalog();
     }
 }
