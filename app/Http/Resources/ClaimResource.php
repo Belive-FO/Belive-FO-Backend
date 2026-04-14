@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class ClaimResource extends JsonResource
 {
@@ -12,11 +13,31 @@ class ClaimResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->title,
+            'claimantName' => $this->when(
+                $this->relationLoaded('user'),
+                fn () => $this->user?->name,
+            ),
+            'submittedBy' => $this->when(
+                $this->relationLoaded('user'),
+                fn () => $this->user?->name,
+            ),
+            'user' => $this->when(
+                $this->relationLoaded('user') && $this->user,
+                function () {
+                    $u = $this->user;
+
+                    return [
+                        'fullName' => $u->name,
+                        'name' => $u->email ? Str::before($u->email, '@') : $u->name,
+                    ];
+                },
+            ),
             'type' => $this->type,
             'claim_type_id' => $this->claim_type_id,
             'subclaim_type_id' => $this->subclaim_type_id,
             'claim_type' => $this->when($this->relationLoaded('claimType') && $this->claimType, function () {
                 $ct = $this->claimType;
+
                 return [
                     'id' => $ct->id,
                     'key' => $ct->key,
@@ -28,6 +49,7 @@ class ClaimResource extends JsonResource
             }),
             'subclaim_type' => $this->when($this->relationLoaded('subclaimType') && $this->subclaimType, function () {
                 $st = $this->subclaimType;
+
                 return [
                     'id' => $st->id,
                     'claim_type_id' => $st->claim_type_id,

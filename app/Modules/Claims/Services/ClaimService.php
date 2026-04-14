@@ -20,7 +20,7 @@ class ClaimService
 
         $query = Claim::query()
             ->where('user_id', $user->id)
-            ->with(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments'])
+            ->with(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments', 'user:id,name,email'])
             ->orderByDesc('created_at');
 
         if (! empty($filters['status'])) {
