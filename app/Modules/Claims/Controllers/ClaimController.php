@@ -7,6 +7,7 @@ use App\Http\Requests\Claims\StoreClaimRequest;
 use App\Http\Requests\Claims\UpdateClaimRequest;
 use App\Http\Resources\ClaimResource;
 use App\Models\Claim;
+use App\Modules\Claims\Exceptions\ApprovalChainUnresolvedException;
 use App\Modules\Claims\Services\ClaimAttachmentService;
 use App\Modules\Claims\Services\ClaimService;
 use App\Traits\ApiResponse;
@@ -49,6 +50,7 @@ class ClaimController extends Controller
                     $this->attachmentService->store($claim, $file);
                 } catch (\Throwable $e) {
                     report($e);
+
                     return $this->error('ATTACHMENT_STORAGE_FAILED', 'Claim created but failed to store attachment: '.$e->getMessage(), 422);
                 }
             }
@@ -81,6 +83,8 @@ class ClaimController extends Controller
             $claim = $this->claimService->submit($claim, $request->user());
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID_STATUS', $e->getMessage(), 422);
+        } catch (ApprovalChainUnresolvedException $e) {
+            return $this->error('APPROVAL_CHAIN_UNRESOLVABLE', $e->getMessage(), 422);
         }
 
         return $this->success(new ClaimResource($claim), 'Claim submitted.');

@@ -103,10 +103,9 @@ class RolesAndPermissionsSeeder extends Seeder
             Permission::where('guard_name', $guardName)->pluck('name')->toArray()
         );
 
-        // Top Management demo user (uuid set explicitly: DatabaseSeeder uses WithoutModelEvents,
-        // so User::creating does not run and Postgres NOT NULL on users.uuid would fail).
-        $user = User::firstOrCreate(
-            ['email' => 'superadmin@example.com'],
+        // Top Management (full permissions via role); uuid required when DatabaseSeeder uses WithoutModelEvents.
+        $topManagementUser = User::firstOrCreate(
+            ['email' => 'topm@gmail.com'],
             [
                 'uuid' => (string) Str::uuid(),
                 'name' => 'Top Management',
@@ -114,11 +113,27 @@ class RolesAndPermissionsSeeder extends Seeder
                 'status' => 'active',
             ]
         );
-        if (empty($user->uuid)) {
-            $user->forceFill(['uuid' => (string) Str::uuid()])->save();
+        if (empty($topManagementUser->uuid)) {
+            $topManagementUser->forceFill(['uuid' => (string) Str::uuid()])->save();
         }
-        $user->syncRoles($topManagement);
-        $user->forceFill(['status' => 'active'])->save();
+        $topManagementUser->syncRoles($topManagement);
+        $topManagementUser->forceFill(['status' => 'active'])->save();
+
+        // Finance demo login; assign department / roles in onboarding as needed.
+        $financeUser = User::firstOrCreate(
+            ['email' => 'finance@gmail.com'],
+            [
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Finance',
+                'password' => Hash::make('password'),
+                'status' => 'active',
+            ]
+        );
+        if (empty($financeUser->uuid)) {
+            $financeUser->forceFill(['uuid' => (string) Str::uuid()])->save();
+        }
+        $financeUser->syncRoles($staff);
+        $financeUser->forceFill(['status' => 'active'])->save();
 
         $hrUser = User::firstOrCreate(
             ['email' => 'hr@gmail.com'],

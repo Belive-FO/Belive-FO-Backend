@@ -3,6 +3,7 @@
 namespace App\Modules\Claims\Services;
 
 use App\Models\Claim;
+use App\Models\ClaimApproval;
 use App\Models\ClaimCategory;
 use App\Models\ClaimMileageDetail;
 use App\Models\ClaimStatusLog;
@@ -13,6 +14,11 @@ use Illuminate\Support\Facades\DB;
 
 class ClaimService
 {
+    public function __construct(
+        private ClaimApprovalChainResolver $chainResolver,
+        private ClaimRejectionNotificationService $rejectionNotifications
+    ) {}
+
     public function index(User $user, array $filters = []): LengthAwarePaginator
     {
         $perPage = (int) ($filters['per_page'] ?? 15);
@@ -23,11 +29,27 @@ class ClaimService
             ->with(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments', 'user:id,name,email'])
             ->orderByDesc('created_at');
 
-        if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
+        $this->applyStatusFilter($query, $filters['status'] ?? null);
 
         return $query->paginate($perPage);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Claim>  $query
+     */
+    private function applyStatusFilter($query, mixed $status): void
+    {
+        if ($status === null || $status === '') {
+            return;
+        }
+        if (is_string($status) && str_contains($status, ',')) {
+            $statuses = array_values(array_filter(array_map('trim', explode(',', $status))));
+
+            $query->whereIn('status', $statuses);
+
+            return;
+        }
+        $query->where('status', $status);
     }
 
     public function store(User $user, array $data): Claim
@@ -76,7 +98,14 @@ class ClaimService
 
     public function show(Claim $claim): Claim
     {
-        $claim->load(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
+        $claim->load([
+            'category',
+            'claimType',
+            'subclaimType',
+            'mileageDetail',
+            'attachments',
+            'claimApprovals.approver.department',
+        ]);
 
         return $claim;
     }
@@ -135,15 +164,30 @@ class ClaimService
             throw new \InvalidArgumentException('Only draft claims can be submitted.');
         }
 
-        if (! ValidClaimStatusTransition::allowed($claim->status, Claim::STATUS_PENDING)) {
+        if (! ValidClaimStatusTransition::allowed($claim->status, Claim::STATUS_PENDING_L1)) {
             throw new \InvalidArgumentException('Claim cannot be submitted from current status.');
         }
 
         return DB::transaction(function () use ($claim, $user) {
-            $claim->update(['status' => Claim::STATUS_PENDING]);
-            $this->logStatus($claim->id, Claim::STATUS_DRAFT, Claim::STATUS_PENDING, $user->id);
+            $steps = $this->chainResolver->buildSteps($user);
 
-            return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
+            foreach ($steps as $step) {
+                ClaimApproval::create([
+                    'claim_id' => $claim->id,
+                    'level' => $step['level'],
+                    'step_kind' => $step['step_kind'],
+                    'status' => ClaimApproval::STATUS_PENDING,
+                    'eligible_approver_ids' => $step['eligible_approver_ids'],
+                ]);
+            }
+
+            $from = $claim->status;
+            $claim->update(['status' => Claim::STATUS_PENDING_L1]);
+            $this->logStatus($claim->id, $from, Claim::STATUS_PENDING_L1, $user->id);
+
+            return $claim->fresh([
+                'category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments', 'claimApprovals',
+            ]);
         });
     }
 
@@ -158,20 +202,104 @@ class ClaimService
         $claim->delete();
     }
 
-    public function approve(User $approver, Claim $claim): Claim
+    public function approve(User $approver, Claim $claim, ?int $level = null): Claim
+    {
+        $claim->load('claimApprovals');
+
+        if ($claim->claimApprovals->isEmpty()) {
+            if ($claim->status === Claim::STATUS_PENDING) {
+                return $this->approveLegacy($approver, $claim);
+            }
+            throw new \InvalidArgumentException('Claim has no approval pipeline rows.');
+        }
+
+        $totalLevels = $claim->claimApprovals->count();
+        $currentLevel = $level ?? $this->chainResolver->currentLevelFromStatus($claim->status);
+        if ($currentLevel === null) {
+            throw new \InvalidArgumentException('Claim is not in a pending approval state.');
+        }
+
+        $row = $claim->claimApprovals->firstWhere('level', $currentLevel);
+        if ($row === null || $row->status !== ClaimApproval::STATUS_PENDING) {
+            throw new \InvalidArgumentException('This approval step is not pending.');
+        }
+
+        $eligible = $row->eligible_approver_ids ?? [];
+        if (! in_array($approver->id, $eligible, true)) {
+            throw new \InvalidArgumentException('You are not an eligible approver for this step.');
+        }
+
+        if (! ValidClaimStatusTransition::allowed($claim->status, Claim::STATUS_APPROVED)
+            && ! $this->isPipelineAdvance($claim->status, $currentLevel, $totalLevels)) {
+            throw new \InvalidArgumentException('Claim cannot be approved from current status.');
+        }
+
+        return DB::transaction(function () use ($approver, $claim, $row, $currentLevel, $totalLevels) {
+            $fromStatus = $claim->status;
+            $row->update([
+                'status' => ClaimApproval::STATUS_APPROVED,
+                'approver_id' => $approver->id,
+                'decided_at' => now(),
+                'rejection_reason' => null,
+            ]);
+
+            if ($currentLevel >= $totalLevels) {
+                $claim->update([
+                    'status' => Claim::STATUS_APPROVED,
+                    'approved_by' => $approver->id,
+                    'approved_at' => now(),
+                    'rejected_reason' => null,
+                ]);
+                $this->logStatus($claim->id, $fromStatus, Claim::STATUS_APPROVED, $approver->id);
+                if ($claim->category_id !== null) {
+                    ClaimCategory::where('id', $claim->category_id)->increment('spent', $claim->amount);
+                }
+            } else {
+                $next = $this->chainResolver->pendingStatusForLevel($currentLevel + 1);
+                if (! ValidClaimStatusTransition::allowed($fromStatus, $next)) {
+                    throw new \InvalidArgumentException('Invalid pipeline transition.');
+                }
+                $claim->update([
+                    'status' => $next,
+                    'approved_by' => null,
+                    'approved_at' => null,
+                    'rejected_reason' => null,
+                ]);
+                $this->logStatus($claim->id, $fromStatus, $next, $approver->id);
+            }
+
+            return $claim->fresh([
+                'category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments', 'claimApprovals.approver.department',
+            ]);
+        });
+    }
+
+    private function isPipelineAdvance(string $fromStatus, int $currentLevel, int $totalLevels): bool
+    {
+        if ($currentLevel >= $totalLevels) {
+            return ValidClaimStatusTransition::allowed($fromStatus, Claim::STATUS_APPROVED);
+        }
+
+        $next = $this->chainResolver->pendingStatusForLevel($currentLevel + 1);
+
+        return ValidClaimStatusTransition::allowed($fromStatus, $next);
+    }
+
+    private function approveLegacy(User $approver, Claim $claim): Claim
     {
         if (! ValidClaimStatusTransition::allowed($claim->status, Claim::STATUS_APPROVED)) {
             throw new \InvalidArgumentException('Claim cannot be approved from current status.');
         }
 
         return DB::transaction(function () use ($approver, $claim) {
+            $from = $claim->status;
             $claim->update([
                 'status' => Claim::STATUS_APPROVED,
                 'approved_by' => $approver->id,
                 'approved_at' => now(),
                 'rejected_reason' => null,
             ]);
-            $this->logStatus($claim->id, $claim->getOriginal('status'), Claim::STATUS_APPROVED, $approver->id);
+            $this->logStatus($claim->id, $from, Claim::STATUS_APPROVED, $approver->id);
             if ($claim->category_id !== null) {
                 ClaimCategory::where('id', $claim->category_id)->increment('spent', $claim->amount);
             }
@@ -180,20 +308,84 @@ class ClaimService
         });
     }
 
-    public function reject(User $rejector, Claim $claim, string $reason): Claim
+    public function reject(User $rejector, Claim $claim, string $reason, ?int $level = null): Claim
     {
+        $claim->load('claimApprovals');
+
+        if ($claim->claimApprovals->isEmpty()) {
+            if ($claim->status === Claim::STATUS_PENDING) {
+                return $this->rejectLegacy($rejector, $claim, $reason);
+            }
+            throw new \InvalidArgumentException('Claim has no approval pipeline rows.');
+        }
+
+        $currentLevel = $level ?? $this->chainResolver->currentLevelFromStatus($claim->status);
+        if ($currentLevel === null) {
+            throw new \InvalidArgumentException('Claim is not in a pending approval state.');
+        }
+
+        $row = $claim->claimApprovals->firstWhere('level', $currentLevel);
+        if ($row === null || $row->status !== ClaimApproval::STATUS_PENDING) {
+            throw new \InvalidArgumentException('This approval step is not pending.');
+        }
+
+        $eligible = $row->eligible_approver_ids ?? [];
+        if (! in_array($rejector->id, $eligible, true)) {
+            throw new \InvalidArgumentException('You are not an eligible approver for this step.');
+        }
+
         if (! ValidClaimStatusTransition::allowed($claim->status, Claim::STATUS_REJECTED)) {
             throw new \InvalidArgumentException('Claim cannot be rejected from current status.');
         }
 
-        return DB::transaction(function () use ($rejector, $claim, $reason) {
+        return DB::transaction(function () use ($rejector, $claim, $reason, $row, $currentLevel) {
+            $from = $claim->status;
+            $row->update([
+                'status' => ClaimApproval::STATUS_REJECTED,
+                'approver_id' => $rejector->id,
+                'decided_at' => now(),
+                'rejection_reason' => $reason,
+            ]);
+
             $claim->update([
                 'status' => Claim::STATUS_REJECTED,
                 'rejected_reason' => $reason,
                 'approved_by' => null,
                 'approved_at' => null,
             ]);
-            $this->logStatus($claim->id, $claim->getOriginal('status'), Claim::STATUS_REJECTED, $rejector->id, $reason);
+            $this->logStatus($claim->id, $from, Claim::STATUS_REJECTED, $rejector->id, $reason);
+
+            $claimId = $claim->id;
+            DB::afterCommit(function () use ($claimId, $rejector, $currentLevel, $reason): void {
+                $this->rejectionNotifications->notifyOnRejection(
+                    Claim::query()->with(['claimApprovals', 'user'])->findOrFail($claimId),
+                    $rejector,
+                    $currentLevel,
+                    $reason
+                );
+            });
+
+            return $claim->fresh([
+                'category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments', 'claimApprovals.approver.department',
+            ]);
+        });
+    }
+
+    private function rejectLegacy(User $rejector, Claim $claim, string $reason): Claim
+    {
+        if (! ValidClaimStatusTransition::allowed($claim->status, Claim::STATUS_REJECTED)) {
+            throw new \InvalidArgumentException('Claim cannot be rejected from current status.');
+        }
+
+        return DB::transaction(function () use ($rejector, $claim, $reason) {
+            $from = $claim->status;
+            $claim->update([
+                'status' => Claim::STATUS_REJECTED,
+                'rejected_reason' => $reason,
+                'approved_by' => null,
+                'approved_at' => null,
+            ]);
+            $this->logStatus($claim->id, $from, Claim::STATUS_REJECTED, $rejector->id, $reason);
 
             return $claim->fresh(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments']);
         });
@@ -225,9 +417,8 @@ class ClaimService
             ->with(['category', 'claimType', 'subclaimType', 'mileageDetail', 'attachments', 'user:id,name,email'])
             ->orderByDesc('created_at');
 
-        if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
+        $this->applyStatusFilter($query, $filters['status'] ?? null);
+
         if (! empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
         }

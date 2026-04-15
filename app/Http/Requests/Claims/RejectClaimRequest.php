@@ -21,6 +21,7 @@ class RejectClaimRequest extends FormRequest
     {
         return [
             'reason' => ['required', 'string', 'max:2000'],
+            'level' => ['nullable', 'integer', 'min:1', 'max:10'],
         ];
     }
 }

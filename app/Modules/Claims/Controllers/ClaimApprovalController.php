@@ -4,6 +4,7 @@ namespace App\Modules\Claims\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Claims\RejectClaimRequest;
+use App\Http\Resources\ClaimApprovalResourceCollection;
 use App\Http\Resources\ClaimResource;
 use App\Models\Claim;
 use App\Modules\Claims\Services\ClaimService;
@@ -32,11 +33,37 @@ class ClaimApprovalController extends Controller
         return $this->success(ClaimResource::collection($paginator));
     }
 
+    /**
+     * Enriched approval rows for timeline (step_kind, approver metadata).
+     */
+    public function approvals(Request $request, Claim $claim): JsonResponse
+    {
+        $this->authorize('view', $claim);
+
+        $rows = $claim->claimApprovals()
+            ->with(['approver.department'])
+            ->orderBy('level')
+            ->get();
+
+        return $this->success(
+            ClaimApprovalResourceCollection::make($rows),
+            'Claim approvals retrieved successfully.'
+        );
+    }
+
     public function approve(Request $request, Claim $claim): JsonResponse
     {
         $this->authorize('approve', $claim);
+        $validated = $request->validate([
+            'level' => ['sometimes', 'integer', 'min:1', 'max:10'],
+        ]);
+
         try {
-            $claim = $this->claimService->approve($request->user(), $claim);
+            $claim = $this->claimService->approve(
+                $request->user(),
+                $claim,
+                $validated['level'] ?? null
+            );
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID_STATUS_TRANSITION', $e->getMessage(), 422);
         }
@@ -47,7 +74,12 @@ class ClaimApprovalController extends Controller
     public function reject(RejectClaimRequest $request, Claim $claim): JsonResponse
     {
         try {
-            $claim = $this->claimService->reject($request->user(), $claim, $request->validated('reason'));
+            $claim = $this->claimService->reject(
+                $request->user(),
+                $claim,
+                $request->validated('reason'),
+                $request->validated('level')
+            );
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID_STATUS_TRANSITION', $e->getMessage(), 422);
         }

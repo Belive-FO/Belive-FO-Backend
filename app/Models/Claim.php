@@ -4,26 +4,62 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Claim extends Model
 {
     use HasFactory;
 
     public const TYPE_RECEIPT = 'receipt';
+
     public const TYPE_MILEAGE = 'mileage';
+
     public const TYPE_BUSINESS_TRAVEL = 'business-travel';
+
     public const TYPE_MISCELLANEOUS = 'miscellaneous';
+
     public const TYPE_OFFICE = 'office';
+
     public const TYPE_OUTSTATION = 'outstation';
+
     public const TYPE_RENOVATION = 'renovation';
+
     public const TYPE_SPECIAL_MILEAGE = 'special-mileage';
+
     public const TYPE_TRANSPORTATION = 'transportation';
 
     public const STATUS_DRAFT = 'draft';
+
+    /** Legacy single-step pipeline; new claims use pending_l1… */
     public const STATUS_PENDING = 'pending';
+
+    public const STATUS_PENDING_L1 = 'pending_l1';
+
+    public const STATUS_PENDING_L2 = 'pending_l2';
+
+    public const STATUS_PENDING_L3 = 'pending_l3';
+
+    public const STATUS_PENDING_L4 = 'pending_l4';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_PAID = 'paid';
+
+    /**
+     * @return list<string>
+     */
+    public static function pendingPipelineStatuses(): array
+    {
+        return [
+            self::STATUS_PENDING,
+            self::STATUS_PENDING_L1,
+            self::STATUS_PENDING_L2,
+            self::STATUS_PENDING_L3,
+            self::STATUS_PENDING_L4,
+        ];
+    }
 
     protected $fillable = [
         'user_id',
@@ -90,6 +126,14 @@ class Claim extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * @return HasMany<ClaimApproval, $this>
+     */
+    public function claimApprovals(): HasMany
+    {
+        return $this->hasMany(ClaimApproval::class)->orderBy('level');
     }
 
     public function isMileageType(): bool

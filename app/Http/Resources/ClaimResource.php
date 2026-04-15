@@ -81,6 +81,10 @@ class ClaimResource extends JsonResource
                 ];
             }),
             'attachments' => ClaimAttachmentResource::collection($this->whenLoaded('attachments')),
+            'claim_approvals' => $this->when(
+                $this->relationLoaded('claimApprovals'),
+                fn () => ClaimApprovalResourceCollection::make($this->claimApprovals),
+            ),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

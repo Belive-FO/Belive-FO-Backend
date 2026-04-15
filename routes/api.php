@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Auth\LarkAuthController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\GeocodeController;
+use App\Http\Controllers\InAppNotificationController;
 use App\Http\Controllers\MapsConfigController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ProfileController;
@@ -36,6 +37,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/geocode', [GeocodeController::class, 'geocode']);
         Route::post('/reverse-geocode', [ReverseGeocodeController::class, 'reverseGeocode']);
         Route::get('/maps-config', [MapsConfigController::class, 'index']);
+
+        Route::get('/notifications', [InAppNotificationController::class, 'index'])->middleware('throttle:60,1');
+        Route::patch('/notifications/read-all', [InAppNotificationController::class, 'markAllRead'])
+            ->middleware('throttle:60,1');
+        Route::patch('/notifications/{inAppNotification}/read', [InAppNotificationController::class, 'markRead'])
+            ->middleware('throttle:60,1');
 
         // User Management directory (top_management, hr_admin: all users; hod: same department only)
         Route::middleware(['role:top_management|hr_admin|hod', 'throttle:60,1'])->group(function () {

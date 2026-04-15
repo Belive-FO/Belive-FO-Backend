@@ -36,6 +36,7 @@ Route::middleware(['auth:sanctum', 'check.account_status', 'check.account_locked
     // Claims CRUD
     Route::get('/claims', [ClaimController::class, 'index']);
     Route::post('/claims', [ClaimController::class, 'store']);
+    Route::get('/claims/{claim}/approvals', [ClaimApprovalController::class, 'approvals']);
     Route::get('/claims/{claim}', [ClaimController::class, 'show']);
     Route::put('/claims/{claim}', [ClaimController::class, 'update']);
     Route::patch('/claims/{claim}/submit', [ClaimController::class, 'submit']);
