@@ -9,6 +9,7 @@ use App\Models\ClaimMileageDetail;
 use App\Models\ClaimStatusLog;
 use App\Models\User;
 use App\Modules\Claims\Rules\ValidClaimStatusTransition;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -224,8 +225,7 @@ class ClaimService
             throw new \InvalidArgumentException('This approval step is not pending.');
         }
 
-        $eligible = $row->eligible_approver_ids ?? [];
-        if (! in_array($approver->id, $eligible, true)) {
+        if (! $this->isEligibleApproverForStep($approver, $claim, $row)) {
             throw new \InvalidArgumentException('You are not an eligible approver for this step.');
         }
 
@@ -329,8 +329,7 @@ class ClaimService
             throw new \InvalidArgumentException('This approval step is not pending.');
         }
 
-        $eligible = $row->eligible_approver_ids ?? [];
-        if (! in_array($rejector->id, $eligible, true)) {
+        if (! $this->isEligibleApproverForStep($rejector, $claim, $row)) {
             throw new \InvalidArgumentException('You are not an eligible approver for this step.');
         }
 
@@ -421,9 +420,94 @@ class ClaimService
 
         if (! empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
+        } else {
+            $this->applyApproverQueueScope($query, $requestingUser);
         }
 
         return $query->paginate($perPage);
+    }
+
+    /**
+     * Approvers see claims waiting on their step; everyone still sees their own submissions.
+     *
+     * @param  Builder<\App\Models\Claim>  $query
+     */
+    private function applyApproverQueueScope(Builder $query, User $requestingUser): void
+    {
+        $requestingUser->loadMissing('roles', 'department');
+
+        $query->where(function (Builder $outer) use ($requestingUser): void {
+            $outer->where('claims.user_id', $requestingUser->id);
+
+            if ($requestingUser->hasRole('top_management')) {
+                $outer->orWhere(fn (Builder $q) => $this->scopeClaimAtPendingPipelineStep($q, ClaimApproval::STEP_TOP_MANAGEMENT));
+            }
+
+            if ($this->chainResolver->isFinanceDepartmentHod($requestingUser)) {
+                $outer->orWhere(fn (Builder $q) => $this->scopeClaimAtPendingPipelineStep($q, ClaimApproval::STEP_FINANCE_HOD));
+            }
+
+            if ($requestingUser->hasRole('hod') && $this->chainResolver->isHrDepartment($requestingUser->department)) {
+                $outer->orWhere(fn (Builder $q) => $this->scopeClaimAtPendingPipelineStep($q, ClaimApproval::STEP_HR_HOD));
+            }
+
+            if ($requestingUser->hasRole('hod') && $requestingUser->department_id !== null) {
+                $deptId = (int) $requestingUser->department_id;
+                $outer->orWhere(fn (Builder $q) => $this->scopeClaimAtPendingPipelineStep($q, ClaimApproval::STEP_DEPT_HOD, $deptId));
+            }
+        });
+    }
+
+    /**
+     * Claims whose current pipeline row is pending for the given step_kind (and optional submitter department for dept_hod).
+     *
+     * @param  Builder<\App\Models\Claim>  $query
+     */
+    private function scopeClaimAtPendingPipelineStep(Builder $query, string $stepKind, ?int $submitterDepartmentId = null): void
+    {
+        if ($submitterDepartmentId !== null) {
+            $query->whereHas('user', fn (Builder $uq) => $uq->where('department_id', $submitterDepartmentId));
+        }
+
+        $query->whereIn('claims.status', Claim::pendingPipelineStatuses())
+            ->whereHas('claimApprovals', function (Builder $q) use ($stepKind): void {
+                $q->where('claim_approvals.status', ClaimApproval::STATUS_PENDING)
+                    ->where('claim_approvals.step_kind', $stepKind)
+                    ->whereRaw(
+                        'claim_approvals.level = (CASE claims.status WHEN ? THEN 1 WHEN ? THEN 1 WHEN ? THEN 2 WHEN ? THEN 3 WHEN ? THEN 4 ELSE 0 END)',
+                        [
+                            Claim::STATUS_PENDING,
+                            Claim::STATUS_PENDING_L1,
+                            Claim::STATUS_PENDING_L2,
+                            Claim::STATUS_PENDING_L3,
+                            Claim::STATUS_PENDING_L4,
+                        ]
+                    );
+            });
+    }
+
+    private function isEligibleApproverForStep(User $approver, Claim $claim, ClaimApproval $row): bool
+    {
+        $approver->loadMissing('roles', 'department');
+        $claim->loadMissing('user.department');
+
+        $legacy = $row->eligible_approver_ids ?? [];
+        if (is_array($legacy) && $legacy !== [] && in_array($approver->id, $legacy, true)) {
+            return true;
+        }
+
+        return match ($row->step_kind) {
+            ClaimApproval::STEP_DEPT_HOD => $approver->hasRole('hod')
+                && $approver->department_id !== null
+                && $claim->user !== null
+                && $claim->user->department_id !== null
+                && (int) $claim->user->department_id === (int) $approver->department_id,
+            ClaimApproval::STEP_HR_HOD => $approver->hasRole('hod')
+                && $this->chainResolver->isHrDepartment($approver->department),
+            ClaimApproval::STEP_FINANCE_HOD => $this->chainResolver->isFinanceDepartmentHod($approver),
+            ClaimApproval::STEP_TOP_MANAGEMENT => $approver->hasRole('top_management'),
+            default => false,
+        };
     }
 
     private function logStatus(int $claimId, ?string $fromStatus, string $toStatus, int $changedBy, ?string $note = null): void

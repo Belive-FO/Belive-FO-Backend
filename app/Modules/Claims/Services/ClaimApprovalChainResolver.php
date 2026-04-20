@@ -6,7 +6,6 @@ use App\Models\Claim;
 use App\Models\ClaimApproval;
 use App\Models\Department;
 use App\Models\User;
-use App\Modules\Claims\Exceptions\ApprovalChainUnresolvedException;
 
 class ClaimApprovalChainResolver
 {
@@ -45,7 +44,7 @@ class ClaimApprovalChainResolver
             return false;
         }
 
-        return $this->isFinanceDepartment($dept);
+        return $this->departmentIsFinance($dept);
     }
 
     /**
@@ -98,20 +97,29 @@ class ClaimApprovalChainResolver
         $out = [];
         $level = 1;
         foreach ($steps as $step) {
-            if (empty($step['eligible_approver_ids'])) {
-                throw new ApprovalChainUnresolvedException(
-                    'No eligible approver configured for step '.$step['step_kind'].'. Check departments (HR, Finance) and top_management users.'
-                );
-            }
+            $ids = $step['eligible_approver_ids'] ?? [];
             $out[] = [
                 'level' => $level,
                 'step_kind' => $step['step_kind'],
-                'eligible_approver_ids' => array_values(array_unique($step['eligible_approver_ids'])),
+                'eligible_approver_ids' => array_values(array_unique(is_array($ids) ? $ids : [])),
             ];
             $level++;
         }
 
         return $out;
+    }
+
+    /**
+     * HR department used for hr_hod routing (matches department lookup in buildSteps).
+     */
+    public function isHrDepartment(?Department $dept): bool
+    {
+        if ($dept === null) {
+            return false;
+        }
+
+        return $dept->short_code === 'HR'
+            || $dept->name === 'Human Resource';
     }
 
     /**
@@ -195,8 +203,12 @@ class ClaimApprovalChainResolver
             ->all();
     }
 
-    private function isFinanceDepartment(Department $dept): bool
+    public function departmentIsFinance(?Department $dept): bool
     {
+        if ($dept === null) {
+            return false;
+        }
+
         return $dept->short_code === 'FA'
             || $dept->name === 'Finance & Account';
     }
